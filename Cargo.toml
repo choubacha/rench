@@ -1,0 +1,9 @@
+[package]
+name = "rench"
+version = "0.1.0"
+authors = ["Kevin Choubacha <chewbacha@gmail.com>"]
+
+[dependencies]
+rayon = "0.9"
+clap = "2.29"
+reqwest = "0.8"
