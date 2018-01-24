@@ -50,59 +50,64 @@ impl Summary {
     }
 }
 
-#[test]
-fn summarizes_to_zero_if_empty() {
-    let summary = Summary::from_facts(&Vec::new());
-    assert_eq!(summary.average, Duration::new(0, 0));
-    assert_eq!(summary.median, Duration::new(0, 0));
-    assert_eq!(summary.count, 0);
-}
+#[cfg(test)]
+mod summary_tests {
+    use super::*;
 
-#[test]
-fn averages_the_durations() {
-    let facts = [
-        Fact { status: StatusCode::Ok, duration: Duration::new(1, 0), content_length: 0 },
-        Fact { status: StatusCode::Ok, duration: Duration::new(2, 0), content_length: 0 },
-        Fact { status: StatusCode::Ok, duration: Duration::new(3, 0), content_length: 0 },
-        Fact { status: StatusCode::Ok, duration: Duration::new(4, 0), content_length: 0 },
-    ];
-    let summary = Summary::from_facts(&facts);
-    assert_eq!(summary.average, Duration::new(2, 500000000));
-}
+    #[test]
+    fn summarizes_to_zero_if_empty() {
+        let summary = Summary::from_facts(&Vec::new());
+        assert_eq!(summary.average, Duration::new(0, 0));
+        assert_eq!(summary.median, Duration::new(0, 0));
+        assert_eq!(summary.count, 0);
+    }
 
-#[test]
-fn counts_the_facts() {
-    let facts = [
-        Fact { status: StatusCode::Ok, duration: Duration::new(1, 0), content_length: 0 },
-        Fact { status: StatusCode::Ok, duration: Duration::new(2, 0), content_length: 0 },
-        Fact { status: StatusCode::Ok, duration: Duration::new(3, 0), content_length: 0 },
-        Fact { status: StatusCode::Ok, duration: Duration::new(4, 0), content_length: 0 },
-    ];
-    let summary = Summary::from_facts(&facts);
-    assert_eq!(summary.count, 4);
-}
+    #[test]
+    fn averages_the_durations() {
+        let facts = [
+            Fact { status: StatusCode::Ok, duration: Duration::new(1, 0), content_length: 0 },
+            Fact { status: StatusCode::Ok, duration: Duration::new(2, 0), content_length: 0 },
+            Fact { status: StatusCode::Ok, duration: Duration::new(3, 0), content_length: 0 },
+            Fact { status: StatusCode::Ok, duration: Duration::new(4, 0), content_length: 0 },
+        ];
+        let summary = Summary::from_facts(&facts);
+        assert_eq!(summary.average, Duration::new(2, 500000000));
+    }
 
-#[test]
-fn calculates_the_median_from_an_even_number_of_facts() {
-    let facts = [
-        Fact { status: StatusCode::Ok, duration: Duration::new(1, 0), content_length: 0 },
-        Fact { status: StatusCode::Ok, duration: Duration::new(2, 0), content_length: 0 },
-        Fact { status: StatusCode::Ok, duration: Duration::new(3, 0), content_length: 0 },
-        Fact { status: StatusCode::Ok, duration: Duration::new(100, 0), content_length: 0 },
-    ];
-    let summary = Summary::from_facts(&facts);
-    assert_eq!(summary.median, Duration::new(2, 500000000));
-}
+    #[test]
+    fn counts_the_facts() {
+        let facts = [
+            Fact { status: StatusCode::Ok, duration: Duration::new(1, 0), content_length: 0 },
+            Fact { status: StatusCode::Ok, duration: Duration::new(2, 0), content_length: 0 },
+            Fact { status: StatusCode::Ok, duration: Duration::new(3, 0), content_length: 0 },
+            Fact { status: StatusCode::Ok, duration: Duration::new(4, 0), content_length: 0 },
+        ];
+        let summary = Summary::from_facts(&facts);
+        assert_eq!(summary.count, 4);
+    }
 
-#[test]
-fn calculates_the_median_from_an_odd_number_of_facts() {
-    let facts = [
-        Fact { status: StatusCode::Ok, duration: Duration::new(1, 0), content_length: 0 },
-        Fact { status: StatusCode::Ok, duration: Duration::new(2, 0), content_length: 0 },
-        Fact { status: StatusCode::Ok, duration: Duration::new(100, 0), content_length: 0 },
-    ];
-    let summary = Summary::from_facts(&facts);
-    assert_eq!(summary.median, Duration::new(2, 0));
+    #[test]
+    fn calculates_the_median_from_an_even_number_of_facts() {
+        let facts = [
+            Fact { status: StatusCode::Ok, duration: Duration::new(1, 0), content_length: 0 },
+            Fact { status: StatusCode::Ok, duration: Duration::new(2, 0), content_length: 0 },
+            Fact { status: StatusCode::Ok, duration: Duration::new(3, 0), content_length: 0 },
+            Fact { status: StatusCode::Ok, duration: Duration::new(100, 0), content_length: 0 },
+        ];
+        let summary = Summary::from_facts(&facts);
+        assert_eq!(summary.median, Duration::new(2, 500000000));
+    }
+
+    #[test]
+    fn calculates_the_median_from_an_odd_number_of_facts() {
+        let facts = [
+            Fact { status: StatusCode::Ok, duration: Duration::new(1, 0), content_length: 0 },
+            Fact { status: StatusCode::Ok, duration: Duration::new(2, 0), content_length: 0 },
+            Fact { status: StatusCode::Ok, duration: Duration::new(100, 0), content_length: 0 },
+        ];
+        let summary = Summary::from_facts(&facts);
+        assert_eq!(summary.median, Duration::new(2, 0));
+    }
 }
 
 fn make_request(url: &str) {
