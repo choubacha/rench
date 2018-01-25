@@ -4,6 +4,7 @@ extern crate reqwest;
 use clap::{Arg, App};
 use reqwest::{StatusCode, Request, Method, Client};
 use std::time::{Instant, Duration};
+use std::thread;
 
 #[derive(Debug)]
 struct Fact {
@@ -176,7 +177,7 @@ mod summary_tests {
     }
 }
 
-fn make_request(url: &str) {
+fn make_request(url: &str) -> Vec<Fact> {
     let client = Client::new();
 
     // Warm up
@@ -185,22 +186,19 @@ fn make_request(url: &str) {
         "Failure to even connect is no good",
     );
 
-    let facts: Vec<Fact> = (0..1000)
+    (0..1000)
         .map(|_| {
             let mut request = client.get(url);
             let start = Instant::now();
             let resp = request.send().expect("Failure to even connect is no good");
             let duration = start.elapsed();
-            let fact = Fact {
+            Fact {
                 duration,
                 status: resp.status(),
                 content_length: 0,
-            };
-            println!("{:?}", fact);
-            fact
+            }
         })
-        .collect();
-    println!("{:?}", Summary::from_facts(&facts));
+        .collect()
 }
 
 fn main() {
@@ -208,6 +206,13 @@ fn main() {
         .author("Kevin Choubacha <chewbacha@gmail.com>")
         .arg(Arg::with_name("URL").required(true))
         .get_matches();
-    let url = matches.value_of("URL").expect("URL is required");
-    make_request(url);
+    let url = matches.value_of("URL").expect("URL is required").to_string();
+    let handles: Vec<thread::JoinHandle<Vec<Fact>>> = (0..4).map(|_| {
+        let param = url.clone();
+        thread::spawn(move || make_request(&param))
+    }).collect();
+    let mut flat_facts: Vec<Fact> = Vec::new();
+    let facts: Vec<Vec<Fact>> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+    facts.into_iter().for_each(|facts| flat_facts.extend(facts));
+    println!("{:?}", Summary::from_facts(&flat_facts));
 }
