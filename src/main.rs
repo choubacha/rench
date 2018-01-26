@@ -216,7 +216,7 @@ fn main() {
 
     let threads = matches
         .value_of("threads")
-        .unwrap_or("4")
+        .unwrap_or("1")
         .parse::<u32>()
         .expect("Expected valid number for threads");
 
