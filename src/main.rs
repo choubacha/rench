@@ -177,7 +177,7 @@ mod summary_tests {
     }
 }
 
-fn make_request(url: &str) -> Vec<Fact> {
+fn make_request(url: &str, number_of_requests: u32) -> Vec<Fact> {
     let client = Client::new();
 
     // Warm up
@@ -186,7 +186,7 @@ fn make_request(url: &str) -> Vec<Fact> {
         "Failure to even connect is no good",
     );
 
-    (0..1000)
+    (0..number_of_requests)
         .map(|_| {
             let mut request = client.get(url);
             let start = Instant::now();
@@ -205,14 +205,37 @@ fn main() {
     let matches = App::new("Git Release Names")
         .author("Kevin Choubacha <chewbacha@gmail.com>")
         .arg(Arg::with_name("URL").required(true))
+        .arg(Arg::with_name("threads").short("t").takes_value(true))
+        .arg(Arg::with_name("requests").short("n").takes_value(true))
         .get_matches();
-    let url = matches.value_of("URL").expect("URL is required").to_string();
-    let handles: Vec<thread::JoinHandle<Vec<Fact>>> = (0..4).map(|_| {
-        let param = url.clone();
-        thread::spawn(move || make_request(&param))
-    }).collect();
-    let mut flat_facts: Vec<Fact> = Vec::new();
+
+    let url = matches
+        .value_of("URL")
+        .expect("URL is required")
+        .to_string();
+
+    let threads = matches
+        .value_of("threads")
+        .unwrap_or("4")
+        .parse::<u32>()
+        .expect("Expected valid number for threads");
+
+    let requests = matches
+        .value_of("requests")
+        .unwrap_or("1000")
+        .parse::<u32>()
+        .expect("Expected valid number for number of requests");
+
+    let handles: Vec<thread::JoinHandle<Vec<Fact>>> = (0..threads)
+        .map(|_| {
+            let param = url.clone();
+            thread::spawn(move || make_request(&param, requests / threads))
+        })
+        .collect();
     let facts: Vec<Vec<Fact>> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+
+    let mut flat_facts: Vec<Fact> = Vec::new();
     facts.into_iter().for_each(|facts| flat_facts.extend(facts));
+
     println!("{:?}", Summary::from_facts(&flat_facts));
 }
