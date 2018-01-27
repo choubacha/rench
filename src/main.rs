@@ -177,20 +177,20 @@ mod summary_tests {
     }
 }
 
-fn make_request(url: &str, number_of_requests: u32) -> Vec<Fact> {
+fn make_requests(url: &str, number_of_requests: u32) -> Vec<Fact> {
     let client = Client::new();
 
     // Warm up
     let request = Request::new(Method::Get, url.parse().expect("Invalid url"));
     let _ = client.execute(request).expect(
-        "Failure to even connect is no good",
+        "Failure to warm connection",
     );
 
     (0..number_of_requests)
         .map(|_| {
-            let mut request = client.get(url);
+            let request = Request::new(Method::Get, url.parse().expect("Invalid url"));
             let start = Instant::now();
-            let resp = request.send().expect("Failure to even connect is no good");
+            let resp = client.execute(request).expect("Failure to even connect is no good");
             let duration = start.elapsed();
             Fact {
                 duration,
@@ -205,7 +205,7 @@ fn main() {
     let matches = App::new("Git Release Names")
         .author("Kevin Choubacha <chewbacha@gmail.com>")
         .arg(Arg::with_name("URL").required(true))
-        .arg(Arg::with_name("threads").short("t").takes_value(true))
+        .arg(Arg::with_name("concurrency").short("c").takes_value(true))
         .arg(Arg::with_name("requests").short("n").takes_value(true))
         .get_matches();
 
@@ -215,7 +215,7 @@ fn main() {
         .to_string();
 
     let threads = matches
-        .value_of("threads")
+        .value_of("concurrency")
         .unwrap_or("1")
         .parse::<u32>()
         .expect("Expected valid number for threads");
@@ -229,7 +229,7 @@ fn main() {
     let handles: Vec<thread::JoinHandle<Vec<Fact>>> = (0..threads)
         .map(|_| {
             let param = url.clone();
-            thread::spawn(move || make_request(&param, requests / threads))
+            thread::spawn(move || make_requests(&param, requests / threads))
         })
         .collect();
     let facts: Vec<Vec<Fact>> = handles.into_iter().map(|h| h.join().unwrap()).collect();
