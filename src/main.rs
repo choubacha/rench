@@ -182,15 +182,16 @@ fn make_requests(url: &str, number_of_requests: u32) -> Vec<Fact> {
 
     // Warm up
     let request = Request::new(Method::Get, url.parse().expect("Invalid url"));
-    let _ = client.execute(request).expect(
-        "Failure to warm connection",
-    );
+    let _ = client.execute(request).expect("Failure to warm connection");
 
     (0..number_of_requests)
         .map(|_| {
             let request = Request::new(Method::Get, url.parse().expect("Invalid url"));
             let start = Instant::now();
-            let resp = client.execute(request).expect("Failure to even connect is no good");
+            let mut resp = client.execute(request).expect(
+                "Failure to even connect is no good",
+            );
+            let _ = resp.text().expect("Read the body");
             let duration = start.elapsed();
             Fact {
                 duration,
