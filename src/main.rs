@@ -187,12 +187,13 @@ fn make_requests(url: &str, number_of_requests: u32) -> Vec<Fact> {
     (0..number_of_requests)
         .map(|_| {
             let request = Request::new(Method::Get, url.parse().expect("Invalid url"));
-            let start = Instant::now();
-            let mut resp = client.execute(request).expect(
-                "Failure to even connect is no good",
-            );
-            let _ = resp.text().expect("Read the body");
-            let duration = start.elapsed();
+            let (resp, duration) = time_it(|| {
+                let mut resp = client.execute(request).expect(
+                    "Failure to even connect is no good",
+                );
+                let _ = resp.text().expect("Read the body");
+                resp
+            });
             Fact {
                 duration,
                 status: resp.status(),
@@ -200,6 +201,13 @@ fn make_requests(url: &str, number_of_requests: u32) -> Vec<Fact> {
             }
         })
         .collect()
+}
+
+fn time_it<F, U>(f: F) -> (U, Duration)
+    where F: FnOnce() -> U
+{
+    let start = Instant::now();
+    (f(), start.elapsed())
 }
 
 fn main() {
@@ -233,7 +241,12 @@ fn main() {
             thread::spawn(move || make_requests(&param, requests / threads))
         })
         .collect();
-    let facts: Vec<Vec<Fact>> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+    let (facts, duration): (Vec<Vec<Fact>>, Duration) = time_it(|| {
+        handles.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let seconds = duration.as_secs() as f64 + (duration.subsec_nanos() as f64 / 1_000_000_000f64);
+    println!("Took {} seconds", seconds);
+    println!("{} requests / second", requests as f64 / seconds);
 
     let mut flat_facts: Vec<Fact> = Vec::new();
     facts.into_iter().for_each(|facts| flat_facts.extend(facts));
