@@ -1,5 +1,6 @@
 use std::time::Duration;
 use reqwest::{StatusCode, Response};
+use std::fmt;
 
 #[derive(Debug)]
 pub struct Fact {
@@ -22,6 +23,8 @@ impl Fact {
 pub struct Summary {
     average: Duration,
     median: Duration,
+    max: Duration,
+    min: Duration,
     count: u32,
 }
 
@@ -30,8 +33,31 @@ impl Summary {
         Summary {
             average: Duration::new(0, 0),
             median: Duration::new(0, 0),
+            max: Duration::new(0, 0),
+            min: Duration::new(0, 0),
             count: 0,
         }
+    }
+}
+
+fn to_ms(d: Duration) -> f64 {
+    (d.as_secs() as f64 * 1_000f64) + (d.subsec_nanos() as f64 / 1_000_000f64)
+}
+
+#[test]
+fn exchange_duration_to_ms() {
+    assert_eq!(to_ms(Duration::new(1, 500000)), 1000.5f64);
+}
+
+impl fmt::Display for Summary {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Summary")?;
+        writeln!(f, "  Average:   {} ms", to_ms(self.average))?;
+        writeln!(f, "  Median:    {} ms", to_ms(self.median))?;
+        writeln!(f, "  Longest:   {} ms", to_ms(self.max))?;
+        writeln!(f, "  Shortest:  {} ms", to_ms(self.min))?;
+        writeln!(f, "  Requests:  {}", self.count)?;
+        Ok(())
     }
 }
 
@@ -46,18 +72,22 @@ impl Summary {
         let mut sorted: Vec<Duration> = facts.iter().map(|f| f.duration.clone()).collect();
         sorted.sort();
 
-        let mid = facts.len() / 2;
+        let mid = sorted.len() / 2;
         let median = if facts.len() % 2 == 0 {
             // even
-            (facts[mid - 1].duration + facts[mid].duration) / 2
+            (sorted[mid - 1] + sorted[mid]) / 2
         } else {
             // odd
-            facts[mid].duration
+            sorted[mid]
         };
+        let min = *sorted.first().expect("Returned early if empty");
+        let max = *sorted.last().expect("Returned early if empty");
         Summary {
             average,
             median,
             count,
+            min,
+            max,
         }
     }
 }
@@ -131,7 +161,7 @@ mod summary_tests {
     }
 
     #[test]
-    fn calculates_the_median_from_an_even_number_of_facts() {
+    fn calculates_percentiles_from_an_even_number_of_facts() {
         let facts = [
             Fact {
                 status: StatusCode::Ok,
@@ -156,10 +186,12 @@ mod summary_tests {
         ];
         let summary = Summary::from_facts(&facts);
         assert_eq!(summary.median, Duration::new(2, 500000000));
+        assert_eq!(summary.max, Duration::new(100, 0));
+        assert_eq!(summary.min, Duration::new(1, 0));
     }
 
     #[test]
-    fn calculates_the_median_from_an_odd_number_of_facts() {
+    fn calculates_percentiles_from_an_odd_number_of_facts() {
         let facts = [
             Fact {
                 status: StatusCode::Ok,
@@ -179,5 +211,7 @@ mod summary_tests {
         ];
         let summary = Summary::from_facts(&facts);
         assert_eq!(summary.median, Duration::new(2, 0));
+        assert_eq!(summary.max, Duration::new(100, 0));
+        assert_eq!(summary.min, Duration::new(1, 0));
     }
 }

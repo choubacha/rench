@@ -71,6 +71,22 @@ fn main() {
     let (sender, receiver) = channel::<Option<Fact>>();
     let mut facts: Vec<Fact> = Vec::with_capacity(requests);
 
+    let rec_handle = thread::spawn(move || {
+        let mut threads_finished = 0;
+        while threads_finished < threads {
+            if let Some(fact) = receiver.recv().expect("To receive correctly") {
+                facts.push(fact);
+                if (facts.len() % (requests / 10)) == 0 {
+                    println!("{} requests", facts.len());
+                }
+            } else {
+                threads_finished += 1;
+            }
+        }
+        facts
+    });
+
+    println!("Beginning requests");
     let handles: Vec<thread::JoinHandle<()>> = (0..threads)
         .map(|_| {
             let urls: Vec<String> = urls.clone();
@@ -79,25 +95,16 @@ fn main() {
         })
         .collect();
 
-    let rec_handle = thread::spawn(move || {
-        let mut threads_finished = 0;
-        while threads_finished < threads {
-            if let Some(fact) = receiver.recv().expect("To receive correctly") {
-                facts.push(fact);
-            } else {
-                threads_finished += 1;
-            }
-        }
-        facts
-    });
-
     let ((), duration) = time_it(|| {
         handles.into_iter().for_each(|h| h.join().expect("Sending thread to finish"));
     });
     let facts = rec_handle.join().expect("Receiving thread to finish");
-
     let seconds = duration.as_secs() as f64 + (duration.subsec_nanos() as f64 / 1_000_000_000f64);
+
+    println!("Finished!");
+    println!("");
     println!("Took {} seconds", seconds);
     println!("{} requests / second", requests as f64 / seconds);
-    println!("{:?}", Summary::from_facts(&facts));
+    println!("");
+    println!("{}", Summary::from_facts(&facts));
 }
