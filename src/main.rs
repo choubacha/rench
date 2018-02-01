@@ -8,6 +8,7 @@ use std::thread;
 use std::sync::mpsc::{channel, Sender};
 
 mod stats;
+mod chart;
 use stats::{Fact, Summary};
 
 
@@ -25,13 +26,11 @@ fn make_requests(urls: Vec<String>, number_of_requests: usize, sender: Sender<Op
             let _ = resp.text().expect("Read the body");
             resp
         });
-        sender
-            .send(Some(Fact::record(resp, duration)))
-            .expect("to send the fact correctly");
+        sender.send(Some(Fact::record(resp, duration))).expect(
+            "to send the fact correctly",
+        );
     });
-    sender
-        .send(None)
-        .expect("to send None correctly");
+    sender.send(None).expect("to send None correctly");
 }
 
 fn time_it<F, U>(f: F) -> (U, Duration)
