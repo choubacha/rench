@@ -1,6 +1,7 @@
 pub struct Chart {
     height: u32,
-    fill: char,
+    full: char,
+    half_full: char,
     space: char,
 }
 
@@ -8,7 +9,8 @@ impl Chart {
     pub fn new() -> Chart {
         Chart {
             height: 10,
-            fill: '▌',
+            full: '▌',
+            half_full: '▖',
             space: ' ',
         }
     }
@@ -31,12 +33,16 @@ impl Chart {
             )
         });
         let row_increment = (max - min) / self.height as f64;
-        let mut ret = String::with_capacity(self.height as usize * data.len());
+        let mut ret = String::with_capacity(self.height as usize * data.len() * 2);
         for row in 0..self.height {
             let floor = max - ((row + 1) as f64 * row_increment);
             for datum in &data {
                 ret.push(if *datum > floor {
-                    self.fill.clone()
+                    if *datum > (floor + row_increment / 2.) {
+                        self.full.clone()
+                    } else {
+                        self.half_full.clone()
+                    }
                 } else {
                     self.space.clone()
                 });
@@ -64,7 +70,7 @@ mod tests {
             chart,
             "   ▌    4
    ▌   
-  ▌▌▌  
+  ▖▌▖  
   ▌▌▌  
   ▌▌▌  
  ▌▌▌▌▌ 
