@@ -29,6 +29,7 @@ pub struct Summary {
     min: Duration,
     count: u32,
     percentiles: Vec<Duration>,
+    latency_histogram: Vec<u32>,
 }
 
 impl Summary {
@@ -40,6 +41,7 @@ impl Summary {
             min: Duration::new(0, 0),
             count: 0,
             percentiles: vec![Duration::new(0, 0); 100],
+            latency_histogram: vec![0; 0],
         }
     }
 }
@@ -62,9 +64,12 @@ impl fmt::Display for Summary {
         writeln!(f, "  Shortest:  {} ms", to_ms(self.min))?;
         writeln!(f, "  Requests:  {}", self.count)?;
         writeln!(f, "")?;
-        writeln!(f, "Latency Percentiles:")?;
+        writeln!(f, "Latency Percentiles (2% of requests per bar):")?;
         let percentiles: Vec<f64> = self.percentiles.iter().map(|d| to_ms(*d)).collect();
-        writeln!(f, "{}", Chart::new().make(percentiles))?;
+        writeln!(f, "{}", Chart::new().make(&percentiles))?;
+        writeln!(f, "")?;
+        writeln!(f, "Latency Histogram (each bar is 2% of max latency)")?;
+        writeln!(f, "{}", Chart::new().make(&self.latency_histogram))?;
         Ok(())
     }
 }
@@ -91,6 +96,14 @@ impl Summary {
         let min = *sorted.first().expect("Returned early if empty");
         let max = *sorted.last().expect("Returned early if empty");
 
+        let bin_size = to_ms(max) / 50.;
+        let mut latency_histogram = vec![0; 50];
+
+        for duration in &sorted {
+            let index = (to_ms(*duration) / bin_size) as usize;
+            latency_histogram[cmp::min(index, 49)] += 1;
+        }
+
         let percentiles = (0..50)
             .map(|n| {
                 let mut index = ((n as f64 / 50.0) * sorted.len() as f64) as usize;
@@ -107,6 +120,7 @@ impl Summary {
             min,
             max,
             percentiles,
+            latency_histogram,
         }
     }
 }
@@ -232,6 +246,25 @@ mod summary_tests {
         assert_eq!(summary.median, Duration::new(2, 0));
         assert_eq!(summary.max, Duration::new(100, 0));
         assert_eq!(summary.min, Duration::new(1, 0));
+    }
+
+    #[test]
+    fn counts_the_histogram_of_latencies() {
+        let facts: Vec<Fact> = (0..500)
+            .map(|n| {
+                Fact {
+                    status: StatusCode::Ok,
+                    duration: Duration::new(n, 0),
+                    content_length: 0,
+                }
+            })
+            .collect();
+        let summary = Summary::from_facts(&facts);
+
+        assert_eq!(summary.latency_histogram.len(), 50);
+        assert_eq!(summary.latency_histogram.first(), Some(&10));
+        assert_eq!(summary.latency_histogram.last(), Some(&10));
+        assert_eq!(summary.latency_histogram[25], 10);
     }
 
     #[test]
