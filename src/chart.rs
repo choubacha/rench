@@ -20,11 +20,11 @@ impl Chart {
         self
     }
 
-    pub fn make<N>(&self, data: Vec<N>) -> String
+    pub fn make<N>(&self, data: &Vec<N>) -> String
     where
-        N: Into<f64>,
+        N: Into<f64> + Clone,
     {
-        let data: Vec<f64> = data.into_iter().map(|d| d.into()).collect();
+        let data: Vec<f64> = data.into_iter().map(|d| d.clone().into()).collect();
         let (min, max): (f64, f64) = data.iter().fold((0., 0.), |(min, max), datum| {
             let datum = datum.clone();
             (
@@ -65,10 +65,11 @@ mod tests {
 
     #[test]
     fn it_makes_a_chart_of_default_height() {
-        let chart = Chart::new().make(vec![1, 2, 3, 4, 3, 2, 1]);
+        let chart = Chart::new().make(&vec![1, 2, 3, 4, 3, 2, 1]);
         assert_eq!(
             chart,
-            "   ▌    4
+            "
+   ▌    4
    ▌   
   ▖▌▖  
   ▌▌▌  
@@ -84,7 +85,7 @@ mod tests {
 
     #[test]
     fn it_can_change_the_height() {
-        let chart = Chart::new().height(4).make(vec![1, 2, 3, 4, 3, 2, 1]);
+        let chart = Chart::new().height(4).make(&vec![1, 2, 3, 4, 3, 2, 1]);
         assert_eq!(
             chart,
             "   ▌    4
