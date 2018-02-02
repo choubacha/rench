@@ -91,9 +91,9 @@ impl Summary {
         let min = *sorted.first().expect("Returned early if empty");
         let max = *sorted.last().expect("Returned early if empty");
 
-        let percentiles = (0..100)
+        let percentiles = (0..50)
             .map(|n| {
-                let mut index = ((n as f64 / 100.0) * sorted.len() as f64) as usize;
+                let mut index = ((n as f64 / 50.0) * sorted.len() as f64) as usize;
                 index = cmp::max(index, 0);
                 index = cmp::min(index, sorted.len() - 1);
                 sorted[index]
@@ -247,10 +247,10 @@ mod summary_tests {
             .collect();
         let summary = Summary::from_facts(&facts);
 
-        assert_eq!(summary.percentiles.len(), 100);
+        assert_eq!(summary.percentiles.len(), 50);
         assert_eq!(summary.percentiles.first(), Some(&Duration::new(0, 0)));
         assert_eq!(summary.percentiles.last(), Some(&Duration::new(49, 0)));
-        assert_eq!(summary.percentiles[50], Duration::new(25, 0));
+        assert_eq!(summary.percentiles[25], Duration::new(25, 0));
     }
 
     #[test]
@@ -266,9 +266,9 @@ mod summary_tests {
             .collect();
         let summary = Summary::from_facts(&facts);
 
-        assert_eq!(summary.percentiles.len(), 100);
+        assert_eq!(summary.percentiles.len(), 50);
         assert_eq!(summary.percentiles.first(), Some(&Duration::new(0, 0)));
-        assert_eq!(summary.percentiles.last(), Some(&Duration::new(495, 0)));
-        assert_eq!(summary.percentiles[50], Duration::new(250, 0));
+        assert_eq!(summary.percentiles.last(), Some(&Duration::new(490, 0)));
+        assert_eq!(summary.percentiles[25], Duration::new(250, 0));
     }
 }
