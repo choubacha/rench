@@ -1,5 +1,5 @@
 use std::time::Duration;
-use reqwest::{StatusCode, Response};
+use reqwest::{header, StatusCode, Response};
 use std::fmt;
 use chart::Chart;
 use std::cmp;
@@ -8,7 +8,7 @@ use std::cmp;
 pub struct Fact {
     status: StatusCode,
     duration: Duration,
-    content_length: usize,
+    content_length: u64,
 }
 
 impl Fact {
@@ -16,7 +16,11 @@ impl Fact {
         Fact {
             duration,
             status: resp.status(),
-            content_length: 0,
+            content_length: resp
+                .headers()
+                .get::<header::ContentLength>()
+                .map(|len| **len)
+                .unwrap_or(0),
         }
     }
 }
@@ -28,6 +32,7 @@ pub struct Summary {
     max: Duration,
     min: Duration,
     count: u32,
+    content_length: u64,
     percentiles: Vec<Duration>,
     latency_histogram: Vec<u32>,
 }
@@ -40,6 +45,7 @@ impl Summary {
             max: Duration::new(0, 0),
             min: Duration::new(0, 0),
             count: 0,
+            content_length: 0,
             percentiles: vec![Duration::new(0, 0); 100],
             latency_histogram: vec![0; 0],
         }
@@ -48,6 +54,22 @@ impl Summary {
 
 fn to_ms(d: Duration) -> f64 {
     (d.as_secs() as f64 * 1_000f64) + (d.subsec_nanos() as f64 / 1_000_000f64)
+}
+
+const GIGS: u64 = 1024 * 1024 * 1024;
+const MEGS: u64 = 1024 * 1024;
+const KILO: u64 = 1024;
+
+fn pretty_content_length(len: u64) -> String {
+    if len > GIGS {
+        format!("{:0.2} GB", len as f64 / GIGS as f64)
+    } else if len > MEGS {
+        format!("{:0.2} MB", len as f64 / MEGS as f64)
+    } else if len > KILO {
+        format!("{:0.2} KB", len as f64 / KILO as f64)
+    } else {
+        format!("{} B", len)
+    }
 }
 
 #[test]
@@ -63,6 +85,7 @@ impl fmt::Display for Summary {
         writeln!(f, "  Longest:   {} ms", to_ms(self.max))?;
         writeln!(f, "  Shortest:  {} ms", to_ms(self.min))?;
         writeln!(f, "  Requests:  {}", self.count)?;
+        writeln!(f, "  Data:      {}", pretty_content_length(self.content_length))?;
         writeln!(f, "")?;
         writeln!(f, "Latency Percentiles (2% of requests per bar):")?;
         let percentiles: Vec<f64> = self.percentiles.iter().map(|d| to_ms(*d)).collect();
@@ -113,12 +136,15 @@ impl Summary {
             })
             .collect();
 
+        let content_length = facts.iter().fold(0, |len, fact| len + fact.content_length);
+
         Summary {
             average,
             median,
             count,
             min,
             max,
+            content_length,
             percentiles,
             latency_histogram,
         }
@@ -303,5 +329,28 @@ mod summary_tests {
         assert_eq!(summary.percentiles.first(), Some(&Duration::new(0, 0)));
         assert_eq!(summary.percentiles.last(), Some(&Duration::new(490, 0)));
         assert_eq!(summary.percentiles[25], Duration::new(250, 0));
+    }
+
+    #[test]
+    fn sums_up_the_content_lengths() {
+        let facts: Vec<Fact> = (0..500)
+            .map(|n| {
+                Fact {
+                    status: StatusCode::Ok,
+                    duration: Duration::new(n, 0),
+                    content_length: 1,
+                }
+            })
+            .collect();
+        let summary = Summary::from_facts(&facts);
+        assert_eq!(summary.content_length, 500);
+    }
+
+    #[test]
+    fn can_pretty_print_content_length() {
+        assert_eq!(pretty_content_length(500), "500 B");
+        assert_eq!(pretty_content_length(500_000), "488.28 KB");
+        assert_eq!(pretty_content_length(500_000_000), "476.84 MB");
+        assert_eq!(pretty_content_length(500_000_000_000), "465.66 GB");
     }
 }
