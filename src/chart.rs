@@ -68,8 +68,7 @@ mod tests {
         let chart = Chart::new().make(&vec![1, 2, 3, 4, 3, 2, 1]);
         assert_eq!(
             chart,
-            "
-   ▌    4
+            "   ▌    4
    ▌   
   ▖▌▖  
   ▌▌▌  
