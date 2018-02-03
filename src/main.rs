@@ -73,9 +73,21 @@ fn it_can_distribute_all_work_as_evenly_as_possible() {
 fn main() {
     let matches = App::new("Git Release Names")
         .author("Kevin Choubacha <chewbacha@gmail.com>")
-        .arg(Arg::with_name("URL").required(true).multiple(true))
-        .arg(Arg::with_name("concurrency").short("c").takes_value(true))
-        .arg(Arg::with_name("requests").short("n").takes_value(true))
+        .arg(Arg::with_name("URL").required(true).multiple(true).help(
+            "Each url specified will be round robined.",
+        ))
+        .arg(
+            Arg::with_name("concurrency")
+                .short("c")
+                .takes_value(true)
+                .help("The number of concurrent requests to make"),
+        )
+        .arg(
+            Arg::with_name("requests")
+                .short("n")
+                .takes_value(true)
+                .help("The number of requests in total to make"),
+        )
         .get_matches();
 
     let urls: Vec<String> = matches
