@@ -7,6 +7,7 @@ use std::time::{Instant, Duration};
 use std::thread;
 use std::sync::mpsc::{channel, Sender};
 
+mod content_length;
 mod stats;
 mod chart;
 use stats::{Fact, Summary};
