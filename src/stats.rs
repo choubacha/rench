@@ -3,25 +3,114 @@ use reqwest::{header, StatusCode, Response};
 use std::fmt;
 use chart::Chart;
 use std::cmp;
+use content_length::ContentLength;
+
+trait ToMilliseconds {
+    fn to_ms(&self) -> f64;
+}
+
+impl ToMilliseconds for Duration {
+    fn to_ms(&self) -> f64 {
+        (self.as_secs() as f64 * 1_000f64) + (self.subsec_nanos() as f64 / 1_000_000f64)
+    }
+}
+
+#[cfg(test)]
+mod millisecond_tests {
+    use super::*;
+
+    #[test]
+    fn exchange_duration_to_ms() {
+        assert_eq!(Duration::new(1, 500000).to_ms(), 1000.5f64);
+    }
+}
+
+
 
 #[derive(Debug)]
 pub struct Fact {
     status: StatusCode,
     duration: Duration,
-    content_length: u64,
+    content_length: ContentLength,
 }
 
 impl Fact {
     pub fn record(resp: Response, duration: Duration) -> Fact {
-        Fact {
-            duration,
-            status: resp.status(),
-            content_length: resp
+        let content_length = resp
                 .headers()
                 .get::<header::ContentLength>()
                 .map(|len| **len)
-                .unwrap_or(0),
+                .unwrap_or(0);
+
+        Fact {
+            duration,
+            status: resp.status(),
+            content_length: ContentLength::new(content_length),
         }
+    }
+}
+
+struct DurationStats {
+    sorted: Vec<Duration>
+}
+
+impl DurationStats {
+    fn from_facts(facts: &[Fact]) -> DurationStats {
+        let mut sorted: Vec<Duration> = facts.iter().map(|f| f.duration.clone()).collect();
+        sorted.sort();
+        Self { sorted }
+    }
+
+    fn max(&self) -> Option<Duration> {
+        self.sorted.last().map(|d| *d)
+    }
+
+    fn min(&self) -> Option<Duration> {
+        self.sorted.first().map(|d| *d)
+    }
+
+    fn median(&self) -> Duration {
+        let mid = self.sorted.len() / 2;
+        if self.sorted.len() % 2 == 0 {
+            // even
+            (self.sorted[mid - 1] + self.sorted[mid]) / 2
+        } else {
+            // odd
+            self.sorted[mid]
+        }
+    }
+
+    fn average(&self) -> Duration {
+        self.total() / self.sorted.len() as u32
+    }
+
+    fn latency_histogram(&self) -> Vec<u32> {
+        let mut latency_histogram = vec![0; 50];
+
+        if let Some(max) = self.max() {
+            let bin_size = max.to_ms() / 50.;
+
+            for duration in &self.sorted {
+                let index = (duration.to_ms() / bin_size) as usize;
+                latency_histogram[cmp::min(index, 49)] += 1;
+            }
+        }
+        latency_histogram
+    }
+
+    fn percentiles(&self) -> Vec<Duration> {
+        (0..50)
+            .map(|n| {
+                let mut index = ((n as f64 / 50.0) * self.sorted.len() as f64) as usize;
+                index = cmp::max(index, 0);
+                index = cmp::min(index, self.sorted.len() - 1);
+                self.sorted[index]
+            })
+            .collect()
+    }
+
+    fn total(&self) -> Duration {
+        self.sorted.iter().sum()
     }
 }
 
@@ -38,6 +127,39 @@ pub struct Summary {
 }
 
 impl Summary {
+    pub fn from_facts(facts: &[Fact]) -> Summary {
+        if facts.len() == 0 {
+            return Summary::zero();
+        }
+        let content_length  = Self::total_content_length(&facts);
+        let count           = facts.len() as u32;
+
+        Summary {
+            count,
+            content_length,
+            ..Summary::from_durations(DurationStats::from_facts(&facts))
+        }
+    }
+
+    fn from_durations(stats: DurationStats) -> Summary {
+        let average             = stats.average();
+        let median              = stats.median();
+        let min                 = stats.min().expect("Returned early if empty");
+        let max                 = stats.max().expect("Returned early if empty");
+        let latency_histogram   = stats.latency_histogram();
+        let percentiles         = stats.percentiles();
+
+        Summary {
+            average,
+            median,
+            min,
+            max,
+            percentiles,
+            latency_histogram,
+            ..Summary::zero()
+        }
+    }
+
     fn zero() -> Summary {
         Summary {
             average: Duration::new(0, 0),
@@ -45,46 +167,14 @@ impl Summary {
             max: Duration::new(0, 0),
             min: Duration::new(0, 0),
             count: 0,
-            content_length: ContentLength(0),
+            content_length: ContentLength::zero(),
             percentiles: vec![Duration::new(0, 0); 100],
             latency_histogram: vec![0; 0],
         }
     }
-}
 
-trait ToMilliseconds {
-    fn to_ms(&self) -> f64;
-}
-
-impl ToMilliseconds for Duration {
-    fn to_ms(&self) -> f64 {
-        (self.as_secs() as f64 * 1_000f64) + (self.subsec_nanos() as f64 / 1_000_000f64)
-    }
-}
-
-#[test]
-fn exchange_duration_to_ms() {
-    assert_eq!(Duration::new(1, 500000).to_ms(), 1000.5f64);
-}
-
-const GIGS: u64 = 1024 * 1024 * 1024;
-const MEGS: u64 = 1024 * 1024;
-const KILO: u64 = 1024;
-
-#[derive(Debug)]
-struct ContentLength(u64);
-impl fmt::Display for ContentLength {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.0 > GIGS {
-            write!(f, "{:0.2} GB", self.0 as f64 / GIGS as f64)?;
-        } else if self.0 > MEGS {
-            write!(f, "{:0.2} MB", self.0 as f64 / MEGS as f64)?;
-        } else if self.0 > KILO {
-            write!(f, "{:0.2} KB", self.0 as f64 / KILO as f64)?;
-        } else {
-            write!(f, "{} B", self.0)?;
-        }
-        Ok(())
+    fn total_content_length(facts: &[Fact]) -> ContentLength {
+        facts.iter().fold(ContentLength::zero(), |len, fact| len + &fact.content_length)
     }
 }
 
@@ -108,63 +198,25 @@ impl fmt::Display for Summary {
     }
 }
 
-impl Summary {
-    pub fn from_facts(facts: &[Fact]) -> Summary {
-        if facts.len() == 0 {
-            return Summary::zero();
-        }
-        let count = facts.len() as u32;
-        let sum: Duration = facts.iter().map(|f| f.duration).sum();
-        let average = sum / count;
-        let mut sorted: Vec<Duration> = facts.iter().map(|f| f.duration.clone()).collect();
-        sorted.sort();
-
-        let mid = sorted.len() / 2;
-        let median = if facts.len() % 2 == 0 {
-            // even
-            (sorted[mid - 1] + sorted[mid]) / 2
-        } else {
-            // odd
-            sorted[mid]
-        };
-        let min = *sorted.first().expect("Returned early if empty");
-        let max = *sorted.last().expect("Returned early if empty");
-
-        let bin_size = max.to_ms() / 50.;
-        let mut latency_histogram = vec![0; 50];
-
-        for duration in &sorted {
-            let index = (duration.to_ms() / bin_size) as usize;
-            latency_histogram[cmp::min(index, 49)] += 1;
-        }
-
-        let percentiles = (0..50)
-            .map(|n| {
-                let mut index = ((n as f64 / 50.0) * sorted.len() as f64) as usize;
-                index = cmp::max(index, 0);
-                index = cmp::min(index, sorted.len() - 1);
-                sorted[index]
-            })
-            .collect();
-
-        let content_length = facts.iter().fold(0, |len, fact| len + fact.content_length);
-
-        Summary {
-            average,
-            median,
-            count,
-            min,
-            max,
-            content_length: ContentLength(content_length),
-            percentiles,
-            latency_histogram,
-        }
-    }
-}
-
 #[cfg(test)]
 mod summary_tests {
     use super::*;
+
+    fn ok_zero_length_fact(duration: Duration) -> Fact {
+        Fact {
+            status: StatusCode::Ok,
+            duration: duration,
+            content_length: ContentLength::zero(),
+        }
+    }
+
+    fn ok_instant_fact(content_length: ContentLength) -> Fact {
+        Fact {
+            status: StatusCode::Ok,
+            duration: Duration::new(0, 0),
+            content_length,
+        }
+    }
 
     #[test]
     fn summarizes_to_zero_if_empty() {
@@ -177,26 +229,10 @@ mod summary_tests {
     #[test]
     fn averages_the_durations() {
         let facts = [
-            Fact {
-                status: StatusCode::Ok,
-                duration: Duration::new(1, 0),
-                content_length: 0,
-            },
-            Fact {
-                status: StatusCode::Ok,
-                duration: Duration::new(2, 0),
-                content_length: 0,
-            },
-            Fact {
-                status: StatusCode::Ok,
-                duration: Duration::new(3, 0),
-                content_length: 0,
-            },
-            Fact {
-                status: StatusCode::Ok,
-                duration: Duration::new(4, 0),
-                content_length: 0,
-            },
+            ok_zero_length_fact(Duration::new(2, 0)),
+            ok_zero_length_fact(Duration::new(1, 0)),
+            ok_zero_length_fact(Duration::new(4, 0)),
+            ok_zero_length_fact(Duration::new(3, 0)),
         ];
         let summary = Summary::from_facts(&facts);
         assert_eq!(summary.average, Duration::new(2, 500000000));
@@ -205,26 +241,10 @@ mod summary_tests {
     #[test]
     fn counts_the_facts() {
         let facts = [
-            Fact {
-                status: StatusCode::Ok,
-                duration: Duration::new(1, 0),
-                content_length: 0,
-            },
-            Fact {
-                status: StatusCode::Ok,
-                duration: Duration::new(2, 0),
-                content_length: 0,
-            },
-            Fact {
-                status: StatusCode::Ok,
-                duration: Duration::new(3, 0),
-                content_length: 0,
-            },
-            Fact {
-                status: StatusCode::Ok,
-                duration: Duration::new(4, 0),
-                content_length: 0,
-            },
+            ok_zero_length_fact(Duration::new(2, 0)),
+            ok_zero_length_fact(Duration::new(3, 0)),
+            ok_zero_length_fact(Duration::new(1, 0)),
+            ok_zero_length_fact(Duration::new(4, 0)),
         ];
         let summary = Summary::from_facts(&facts);
         assert_eq!(summary.count, 4);
@@ -233,26 +253,10 @@ mod summary_tests {
     #[test]
     fn calculates_percentiles_from_an_even_number_of_facts() {
         let facts = [
-            Fact {
-                status: StatusCode::Ok,
-                duration: Duration::new(1, 0),
-                content_length: 0,
-            },
-            Fact {
-                status: StatusCode::Ok,
-                duration: Duration::new(2, 0),
-                content_length: 0,
-            },
-            Fact {
-                status: StatusCode::Ok,
-                duration: Duration::new(3, 0),
-                content_length: 0,
-            },
-            Fact {
-                status: StatusCode::Ok,
-                duration: Duration::new(100, 0),
-                content_length: 0,
-            },
+            ok_zero_length_fact(Duration::new(2, 0)),
+            ok_zero_length_fact(Duration::new(3, 0)),
+            ok_zero_length_fact(Duration::new(1, 0)),
+            ok_zero_length_fact(Duration::new(100, 0)),
         ];
         let summary = Summary::from_facts(&facts);
         assert_eq!(summary.median, Duration::new(2, 500000000));
@@ -263,21 +267,9 @@ mod summary_tests {
     #[test]
     fn calculates_percentiles_from_an_odd_number_of_facts() {
         let facts = [
-            Fact {
-                status: StatusCode::Ok,
-                duration: Duration::new(1, 0),
-                content_length: 0,
-            },
-            Fact {
-                status: StatusCode::Ok,
-                duration: Duration::new(2, 0),
-                content_length: 0,
-            },
-            Fact {
-                status: StatusCode::Ok,
-                duration: Duration::new(100, 0),
-                content_length: 0,
-            },
+            ok_zero_length_fact(Duration::new(2, 0)),
+            ok_zero_length_fact(Duration::new(1, 0)),
+            ok_zero_length_fact(Duration::new(100, 0)),
         ];
         let summary = Summary::from_facts(&facts);
         assert_eq!(summary.median, Duration::new(2, 0));
@@ -288,13 +280,7 @@ mod summary_tests {
     #[test]
     fn counts_the_histogram_of_latencies() {
         let facts: Vec<Fact> = (0..500)
-            .map(|n| {
-                Fact {
-                    status: StatusCode::Ok,
-                    duration: Duration::new(n, 0),
-                    content_length: 0,
-                }
-            })
+            .map(|n| ok_zero_length_fact(Duration::new(n, 0)))
             .collect();
         let summary = Summary::from_facts(&facts);
 
@@ -307,13 +293,7 @@ mod summary_tests {
     #[test]
     fn calculates_all_the_percentiles_when_n_less_than_100() {
         let facts: Vec<Fact> = (0..50)
-            .map(|n| {
-                Fact {
-                    status: StatusCode::Ok,
-                    duration: Duration::new(n, 0),
-                    content_length: 0,
-                }
-            })
+            .map(|n| ok_zero_length_fact(Duration::new(n, 0)))
             .collect();
         let summary = Summary::from_facts(&facts);
 
@@ -326,13 +306,7 @@ mod summary_tests {
     #[test]
     fn calculates_all_the_percentiles_when_n_greater_than_100() {
         let facts: Vec<Fact> = (0..500)
-            .map(|n| {
-                Fact {
-                    status: StatusCode::Ok,
-                    duration: Duration::new(n, 0),
-                    content_length: 0,
-                }
-            })
+            .map(|n| ok_zero_length_fact(Duration::new(n, 0)))
             .collect();
         let summary = Summary::from_facts(&facts);
 
@@ -345,23 +319,9 @@ mod summary_tests {
     #[test]
     fn sums_up_the_content_lengths() {
         let facts: Vec<Fact> = (0..500)
-            .map(|n| {
-                Fact {
-                    status: StatusCode::Ok,
-                    duration: Duration::new(n, 0),
-                    content_length: 1,
-                }
-            })
+            .map(|_| ok_instant_fact(ContentLength::new(1)))
             .collect();
         let summary = Summary::from_facts(&facts);
-        assert_eq!(summary.content_length.0, 500);
-    }
-
-    #[test]
-    fn can_pretty_print_content_length() {
-        assert_eq!(format!("{}", ContentLength(500)),               "500 B");
-        assert_eq!(format!("{}", ContentLength(500_000)),           "488.28 KB");
-        assert_eq!(format!("{}", ContentLength(500_000_000)),       "476.84 MB");
-        assert_eq!(format!("{}", ContentLength(500_000_000_000)),   "465.66 GB");
+        assert_eq!(summary.content_length.bytes(), 500);
     }
 }
