@@ -32,7 +32,7 @@ pub struct Summary {
     max: Duration,
     min: Duration,
     count: u32,
-    content_length: u64,
+    content_length: ContentLength,
     percentiles: Vec<Duration>,
     latency_histogram: Vec<u32>,
 }
@@ -45,50 +45,61 @@ impl Summary {
             max: Duration::new(0, 0),
             min: Duration::new(0, 0),
             count: 0,
-            content_length: 0,
+            content_length: ContentLength(0),
             percentiles: vec![Duration::new(0, 0); 100],
             latency_histogram: vec![0; 0],
         }
     }
 }
 
-fn to_ms(d: Duration) -> f64 {
-    (d.as_secs() as f64 * 1_000f64) + (d.subsec_nanos() as f64 / 1_000_000f64)
+trait ToMilliseconds {
+    fn to_ms(&self) -> f64;
+}
+
+impl ToMilliseconds for Duration {
+    fn to_ms(&self) -> f64 {
+        (self.as_secs() as f64 * 1_000f64) + (self.subsec_nanos() as f64 / 1_000_000f64)
+    }
+}
+
+#[test]
+fn exchange_duration_to_ms() {
+    assert_eq!(Duration::new(1, 500000).to_ms(), 1000.5f64);
 }
 
 const GIGS: u64 = 1024 * 1024 * 1024;
 const MEGS: u64 = 1024 * 1024;
 const KILO: u64 = 1024;
 
-fn pretty_content_length(len: u64) -> String {
-    if len > GIGS {
-        format!("{:0.2} GB", len as f64 / GIGS as f64)
-    } else if len > MEGS {
-        format!("{:0.2} MB", len as f64 / MEGS as f64)
-    } else if len > KILO {
-        format!("{:0.2} KB", len as f64 / KILO as f64)
-    } else {
-        format!("{} B", len)
+#[derive(Debug)]
+struct ContentLength(u64);
+impl fmt::Display for ContentLength {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.0 > GIGS {
+            write!(f, "{:0.2} GB", self.0 as f64 / GIGS as f64)?;
+        } else if self.0 > MEGS {
+            write!(f, "{:0.2} MB", self.0 as f64 / MEGS as f64)?;
+        } else if self.0 > KILO {
+            write!(f, "{:0.2} KB", self.0 as f64 / KILO as f64)?;
+        } else {
+            write!(f, "{} B", self.0)?;
+        }
+        Ok(())
     }
-}
-
-#[test]
-fn exchange_duration_to_ms() {
-    assert_eq!(to_ms(Duration::new(1, 500000)), 1000.5f64);
 }
 
 impl fmt::Display for Summary {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "Summary")?;
-        writeln!(f, "  Average:   {} ms", to_ms(self.average))?;
-        writeln!(f, "  Median:    {} ms", to_ms(self.median))?;
-        writeln!(f, "  Longest:   {} ms", to_ms(self.max))?;
-        writeln!(f, "  Shortest:  {} ms", to_ms(self.min))?;
+        writeln!(f, "  Average:   {} ms", self.average.to_ms())?;
+        writeln!(f, "  Median:    {} ms", self.median.to_ms())?;
+        writeln!(f, "  Longest:   {} ms", self.max.to_ms())?;
+        writeln!(f, "  Shortest:  {} ms", self.min.to_ms())?;
         writeln!(f, "  Requests:  {}", self.count)?;
-        writeln!(f, "  Data:      {}", pretty_content_length(self.content_length))?;
+        writeln!(f, "  Data:      {}", self.content_length)?;
         writeln!(f, "")?;
         writeln!(f, "Latency Percentiles (2% of requests per bar):")?;
-        let percentiles: Vec<f64> = self.percentiles.iter().map(|d| to_ms(*d)).collect();
+        let percentiles: Vec<f64> = self.percentiles.iter().map(|d| d.to_ms()).collect();
         writeln!(f, "{}", Chart::new().make(&percentiles))?;
         writeln!(f, "")?;
         writeln!(f, "Latency Histogram (each bar is 2% of max latency)")?;
@@ -119,11 +130,11 @@ impl Summary {
         let min = *sorted.first().expect("Returned early if empty");
         let max = *sorted.last().expect("Returned early if empty");
 
-        let bin_size = to_ms(max) / 50.;
+        let bin_size = max.to_ms() / 50.;
         let mut latency_histogram = vec![0; 50];
 
         for duration in &sorted {
-            let index = (to_ms(*duration) / bin_size) as usize;
+            let index = (duration.to_ms() / bin_size) as usize;
             latency_histogram[cmp::min(index, 49)] += 1;
         }
 
@@ -144,7 +155,7 @@ impl Summary {
             count,
             min,
             max,
-            content_length,
+            content_length: ContentLength(content_length),
             percentiles,
             latency_histogram,
         }
@@ -343,14 +354,14 @@ mod summary_tests {
             })
             .collect();
         let summary = Summary::from_facts(&facts);
-        assert_eq!(summary.content_length, 500);
+        assert_eq!(summary.content_length.0, 500);
     }
 
     #[test]
     fn can_pretty_print_content_length() {
-        assert_eq!(pretty_content_length(500), "500 B");
-        assert_eq!(pretty_content_length(500_000), "488.28 KB");
-        assert_eq!(pretty_content_length(500_000_000), "476.84 MB");
-        assert_eq!(pretty_content_length(500_000_000_000), "465.66 GB");
+        assert_eq!(format!("{}", ContentLength(500)),               "500 B");
+        assert_eq!(format!("{}", ContentLength(500_000)),           "488.28 KB");
+        assert_eq!(format!("{}", ContentLength(500_000_000)),       "476.84 MB");
+        assert_eq!(format!("{}", ContentLength(500_000_000_000)),   "465.66 GB");
     }
 }
