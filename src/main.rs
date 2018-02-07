@@ -1,4 +1,3 @@
-extern crate rayon;
 extern crate clap;
 extern crate reqwest;
 use clap::{Arg, App};
