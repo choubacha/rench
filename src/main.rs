@@ -1,18 +1,19 @@
 extern crate clap;
 extern crate reqwest;
-use clap::{Arg, App};
-use reqwest::{Request, Method, Client};
-use std::time::{Instant, Duration};
+
+use clap::{App, Arg};
+use reqwest::{Client, Method, Request};
+use std::time::{Duration, Instant};
 use std::thread;
-use std::sync::mpsc::{channel, Sender};
+use std::cmp;
+use std::sync::mpsc::{channel, Receiver, Sender};
 
 mod content_length;
 mod stats;
 mod chart;
 use stats::{Fact, Summary};
 
-
-fn make_requests(urls: Vec<String>, number_of_requests: usize, sender: Sender<Option<Fact>>) {
+fn make_requests(urls: Vec<String>, number_of_requests: usize, sender: Sender<Message<Fact>>) {
     let client = Client::new();
 
     (0..number_of_requests).for_each(|n| {
@@ -20,17 +21,17 @@ fn make_requests(urls: Vec<String>, number_of_requests: usize, sender: Sender<Op
 
         let request = Request::new(Method::Get, url.parse().expect("Invalid url"));
         let (resp, duration) = time_it(|| {
-            let mut resp = client.execute(request).expect(
-                "Failure to even connect is no good",
-            );
+            let mut resp = client
+                .execute(request)
+                .expect("Failure to even connect is no good");
             let _ = resp.text().expect("Read the body");
             resp
         });
-        sender.send(Some(Fact::record(resp, duration))).expect(
-            "to send the fact correctly",
-        );
+        sender
+            .send(Message::Body(Fact::record(resp, duration)))
+            .expect("to send the fact correctly");
     });
-    sender.send(None).expect("to send None correctly");
+    sender.send(Message::EOF).expect("to send None correctly");
 }
 
 fn time_it<F, U>(f: F) -> (U, Duration)
@@ -70,12 +71,69 @@ fn it_can_distribute_all_work_as_evenly_as_possible() {
     );
 }
 
+enum Message<T> {
+    Body(T),
+    EOF,
+}
+
+fn recv_messages<T>(
+    rx: Receiver<Message<T>>,
+    expected_message_count: usize,
+    sender_count: usize,
+) -> Vec<T> {
+    let chunk_size = cmp::max(expected_message_count / 10, 1);
+    let mut eof_count = 0;
+    let mut messages: Vec<T> = Vec::with_capacity(expected_message_count);
+
+    while eof_count < sender_count {
+        match rx.recv().expect("To receive correctly") {
+            Message::Body(message) => {
+                messages.push(message);
+                if (messages.len() % (chunk_size)) == 0 {
+                    println!("{} requests", messages.len());
+                }
+            }
+            Message::EOF => eof_count += 1,
+        }
+    }
+    messages
+}
+
+#[cfg(test)]
+mod message_collection_tests {
+    use super::*;
+
+    #[test]
+    fn it_ends_when_all_nones_are_received() {
+        let (tx, rx) = channel::<Message<usize>>();
+        let handle = thread::spawn(move || recv_messages(rx, 0, 4));
+        for _ in 0..4 {
+            let _ = tx.send(Message::EOF);
+        }
+        assert_eq!(handle.join().unwrap(), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn it_collects_all_data_received() {
+        let (tx, rx) = channel::<Message<usize>>();
+        let handle = thread::spawn(move || recv_messages(rx, 0, 1));
+        for n in 0..5 {
+            let _ = tx.send(Message::Body(n as usize));
+        }
+        let _ = tx.send(Message::EOF);
+        assert_eq!(handle.join().unwrap(), vec![0, 1, 2, 3, 4]);
+    }
+}
+
 fn main() {
     let matches = App::new("Git Release Names")
         .author("Kevin Choubacha <chewbacha@gmail.com>")
-        .arg(Arg::with_name("URL").required(true).multiple(true).help(
-            "Each url specified will be round robined.",
-        ))
+        .arg(
+            Arg::with_name("URL")
+                .required(true)
+                .multiple(true)
+                .help("Each url specified will be round robined."),
+        )
         .arg(
             Arg::with_name("concurrency")
                 .short("c")
@@ -108,23 +166,9 @@ fn main() {
         .parse::<usize>()
         .expect("Expected valid number for number of requests");
 
-    let (sender, receiver) = channel::<Option<Fact>>();
-    let mut facts: Vec<Fact> = Vec::with_capacity(requests);
+    let (sender, receiver) = channel::<Message<Fact>>();
 
-    let rec_handle = thread::spawn(move || {
-        let mut threads_finished = 0;
-        while threads_finished < threads {
-            if let Some(fact) = receiver.recv().expect("To receive correctly") {
-                facts.push(fact);
-                if (facts.len() % (requests / 10)) == 0 {
-                    println!("{} requests", facts.len());
-                }
-            } else {
-                threads_finished += 1;
-            }
-        }
-        facts
-    });
+    let rec_handle = thread::spawn(move || recv_messages(receiver, requests, threads));
 
     println!("Beginning requests");
     let handles: Vec<thread::JoinHandle<()>> = distribute_work(threads, requests)
@@ -137,7 +181,9 @@ fn main() {
         .collect();
 
     let ((), duration) = time_it(|| {
-        handles.into_iter().for_each(|h| h.join().expect("Sending thread to finish"));
+        handles
+            .into_iter()
+            .for_each(|h| h.join().expect("Sending thread to finish"));
     });
     let facts = rec_handle.join().expect("Receiving thread to finish");
     let seconds = duration.as_secs() as f64 + (duration.subsec_nanos() as f64 / 1_000_000_000f64);
