@@ -1,5 +1,5 @@
 use std::time::Duration;
-use reqwest::{header, StatusCode, Response};
+use reqwest::{header, Response, StatusCode};
 use std::fmt;
 use chart::Chart;
 use std::cmp;
@@ -25,8 +25,6 @@ mod millisecond_tests {
     }
 }
 
-
-
 #[derive(Debug)]
 pub struct Fact {
     status: StatusCode,
@@ -36,11 +34,10 @@ pub struct Fact {
 
 impl Fact {
     pub fn record(resp: Response, duration: Duration) -> Fact {
-        let content_length = resp
-                .headers()
-                .get::<header::ContentLength>()
-                .map(|len| **len)
-                .unwrap_or(0);
+        let content_length = resp.headers()
+            .get::<header::ContentLength>()
+            .map(|len| **len)
+            .unwrap_or(0);
 
         Fact {
             duration,
@@ -51,7 +48,7 @@ impl Fact {
 }
 
 struct DurationStats {
-    sorted: Vec<Duration>
+    sorted: Vec<Duration>,
 }
 
 impl DurationStats {
@@ -131,8 +128,8 @@ impl Summary {
         if facts.len() == 0 {
             return Summary::zero();
         }
-        let content_length  = Self::total_content_length(&facts);
-        let count           = facts.len() as u32;
+        let content_length = Self::total_content_length(&facts);
+        let count = facts.len() as u32;
 
         Summary {
             count,
@@ -142,12 +139,12 @@ impl Summary {
     }
 
     fn from_durations(stats: DurationStats) -> Summary {
-        let average             = stats.average();
-        let median              = stats.median();
-        let min                 = stats.min().expect("Returned early if empty");
-        let max                 = stats.max().expect("Returned early if empty");
-        let latency_histogram   = stats.latency_histogram();
-        let percentiles         = stats.percentiles();
+        let average = stats.average();
+        let median = stats.median();
+        let min = stats.min().expect("Returned early if empty");
+        let max = stats.max().expect("Returned early if empty");
+        let latency_histogram = stats.latency_histogram();
+        let percentiles = stats.percentiles();
 
         Summary {
             average,
@@ -174,7 +171,9 @@ impl Summary {
     }
 
     fn total_content_length(facts: &[Fact]) -> ContentLength {
-        facts.iter().fold(ContentLength::zero(), |len, fact| len + &fact.content_length)
+        facts.iter().fold(ContentLength::zero(), |len, fact| {
+            len + &fact.content_length
+        })
     }
 }
 
