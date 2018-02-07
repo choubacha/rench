@@ -81,10 +81,10 @@ mod content_length_tests {
 
     #[test]
     fn it_can_add_two_content_lengths() {
-        assert_eq!(ContentLength(1)     + ContentLength(2),     ContentLength(3));
-        assert_eq!(&ContentLength(1)    + &ContentLength(2),    ContentLength(3));
-        assert_eq!(ContentLength(1)     + &ContentLength(2),    ContentLength(3));
-        assert_eq!(&ContentLength(1)    + ContentLength(2),     ContentLength(3));
+        assert_eq!(ContentLength(1) + ContentLength(2), ContentLength(3));
+        assert_eq!(&ContentLength(1) + &ContentLength(2), ContentLength(3));
+        assert_eq!(ContentLength(1) + &ContentLength(2), ContentLength(3));
+        assert_eq!(&ContentLength(1) + ContentLength(2), ContentLength(3));
     }
 
     #[test]
@@ -94,9 +94,9 @@ mod content_length_tests {
 
     #[test]
     fn can_pretty_print_content_length() {
-        assert_eq!(format!("{}", ContentLength(500)),               "500 B");
-        assert_eq!(format!("{}", ContentLength(500_000)),           "488.28 KB");
-        assert_eq!(format!("{}", ContentLength(500_000_000)),       "476.84 MB");
-        assert_eq!(format!("{}", ContentLength(500_000_000_000)),   "465.66 GB");
+        assert_eq!(format!("{}", ContentLength(500)), "500 B");
+        assert_eq!(format!("{}", ContentLength(500_000)), "488.28 KB");
+        assert_eq!(format!("{}", ContentLength(500_000_000)), "476.84 MB");
+        assert_eq!(format!("{}", ContentLength(500_000_000_000)), "465.66 GB");
     }
 }
