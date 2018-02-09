@@ -2,8 +2,6 @@ extern crate clap;
 extern crate reqwest;
 
 use clap::{App, Arg};
-use reqwest::{Client, Method, Request};
-use std::time::{Duration, Instant};
 use std::thread;
 use std::cmp;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -11,35 +9,18 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 mod content_length;
 mod stats;
 mod chart;
+mod engine;
+mod bench;
 use stats::{Fact, Summary};
 
 fn make_requests(urls: Vec<String>, number_of_requests: usize, sender: Sender<Message<Fact>>) {
-    let client = Client::new();
-
-    (0..number_of_requests).for_each(|n| {
-        let url = &urls[n % urls.len()];
-
-        let request = Request::new(Method::Get, url.parse().expect("Invalid url"));
-        let (resp, duration) = time_it(|| {
-            let mut resp = client
-                .execute(request)
-                .expect("Failure to even connect is no good");
-            let _ = resp.text().expect("Read the body");
-            resp
-        });
+    let eng = engine::Engine::new(urls, number_of_requests);
+    eng.run(|fact| {
         sender
-            .send(Message::Body(Fact::record(resp, duration)))
+            .send(Message::Body(fact))
             .expect("to send the fact correctly");
     });
     sender.send(Message::EOF).expect("to send None correctly");
-}
-
-fn time_it<F, U>(f: F) -> (U, Duration)
-where
-    F: FnOnce() -> U,
-{
-    let start = Instant::now();
-    (f(), start.elapsed())
 }
 
 fn distribute_work(threads: usize, requests: usize) -> Vec<usize> {
@@ -180,7 +161,7 @@ fn main() {
         })
         .collect();
 
-    let ((), duration) = time_it(|| {
+    let ((), duration) = bench::time_it(|| {
         handles
             .into_iter()
             .for_each(|h| h.join().expect("Sending thread to finish"));
