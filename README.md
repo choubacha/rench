@@ -2,6 +2,8 @@
 
 A benchmark utility for end points. Written in rust... rust + bench = rench
 
+[![CircleCI](https://circleci.com/gh/kbacha/rench.svg?style=svg)](https://circleci.com/gh/kbacha/rench)
+
 # Installation
 
 ```

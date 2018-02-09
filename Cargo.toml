@@ -2,6 +2,24 @@
 name = "rench"
 version = "0.1.0"
 authors = ["Kevin Choubacha <chewbacha@gmail.com>"]
+description = "A simple http benchmark utility. Written in rust... rust + bench = rench"
+repository = "https://github.com/kbacha/rench"
+homepage = "https://github.com/kbacha/rench"
+keywords = [
+  "http",
+  "benchmark",
+  "cli"
+]
+categories = [
+  "web-programming",
+  "command-line-utilities",
+  "command-line-interface"
+]
+license = "MIT"
+
+[badges]
+circle-ci = { repository = "kbacha/rench" }
+travis-ci = { repository = "kbacha/rench" }
 
 [dependencies]
 clap = "2.29"
