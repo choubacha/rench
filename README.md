@@ -2,7 +2,11 @@
 
 A benchmark utility for end points. Written in rust... rust + bench = rench
 
-[![CircleCI](https://circleci.com/gh/kbacha/rench.svg?style=svg)](https://circleci.com/gh/kbacha/rench)
+[![CircleCI](https://img.shields.io/circleci/project/github/kbacha/rench.svg)](https://circleci.com/gh/kbacha/rench)
+[![Travis](https://img.shields.io/travis/kbacha/rench.svg)](https://travis-ci.org/kbacha/rench)
+[![Crates.io](https://img.shields.io/crates/v/rench.svg)](https://crates.io/crates/rench)
+[![Crates.io](https://img.shields.io/crates/d/rench.svg)](https://crates.io/crates/rench)
+[![Crates.io](https://img.shields.io/crates/l/rench.svg)](https://crates.io/crates/rench)
 
 # Installation
 
