@@ -1,5 +1,9 @@
 extern crate clap;
 extern crate reqwest;
+extern crate hyper;
+extern crate hyper_tls;
+extern crate tokio_core;
+extern crate futures;
 
 use clap::{App, Arg};
 use std::thread;
@@ -13,8 +17,7 @@ mod engine;
 mod bench;
 use stats::{Fact, Summary};
 
-fn make_requests(urls: Vec<String>, number_of_requests: usize, sender: Sender<Message<Fact>>) {
-    let eng = engine::Engine::new(urls, number_of_requests);
+fn make_requests(eng: engine::Engine, sender: Sender<Message<Fact>>) {
     eng.run(|fact| {
         sender
             .send(Message::Body(fact))
@@ -127,6 +130,14 @@ fn main() {
                 .takes_value(true)
                 .help("The number of requests in total to make"),
         )
+        .arg(
+            Arg::with_name("engine")
+                .long("engine")
+                .short("e")
+                .takes_value(true)
+                .possible_values(&["hyper", "reqwest"])
+                .help("The engine to use"),
+        )
         .get_matches();
 
     let urls: Vec<String> = matches
@@ -147,6 +158,10 @@ fn main() {
         .parse::<usize>()
         .expect("Expected valid number for number of requests");
 
+    let engine_kind = matches
+        .value_of("engine")
+        .unwrap_or("reqwest");
+
     let (sender, receiver) = channel::<Message<Fact>>();
 
     let rec_handle = thread::spawn(move || recv_messages(receiver, requests, threads));
@@ -155,9 +170,12 @@ fn main() {
     let handles: Vec<thread::JoinHandle<()>> = distribute_work(threads, requests)
         .into_iter()
         .map(|work| {
-            let urls: Vec<String> = urls.clone();
+            let eng = match engine_kind {
+                "hyper"   => engine::Engine::new(urls.clone(), work).with_hyper(),
+                "reqwest" | _ => engine::Engine::new(urls.clone(), work),
+            };
             let tx = sender.clone();
-            thread::spawn(move || make_requests(urls, work, tx))
+            thread::spawn(move || make_requests(eng, tx))
         })
         .collect();
 

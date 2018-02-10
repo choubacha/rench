@@ -1,8 +1,6 @@
 use std::time::Duration;
-use reqwest::{header, Response, StatusCode};
-use std::fmt;
+use std::{cmp, fmt};
 use chart::Chart;
-use std::cmp;
 use content_length::ContentLength;
 
 trait ToMilliseconds {
@@ -27,22 +25,17 @@ mod millisecond_tests {
 
 #[derive(Debug)]
 pub struct Fact {
-    status: StatusCode,
+    status: u16,
     duration: Duration,
     content_length: ContentLength,
 }
 
 impl Fact {
-    pub fn record(resp: Response, duration: Duration) -> Fact {
-        let content_length = resp.headers()
-            .get::<header::ContentLength>()
-            .map(|len| **len)
-            .unwrap_or(0);
-
+    pub fn record(content_length: ContentLength, status: u16, duration: Duration) -> Fact {
         Fact {
             duration,
-            status: resp.status(),
-            content_length: ContentLength::new(content_length),
+            status,
+            content_length,
         }
     }
 }
@@ -203,7 +196,7 @@ mod summary_tests {
 
     fn ok_zero_length_fact(duration: Duration) -> Fact {
         Fact {
-            status: StatusCode::Ok,
+            status: 200,
             duration: duration,
             content_length: ContentLength::zero(),
         }
@@ -211,7 +204,7 @@ mod summary_tests {
 
     fn ok_instant_fact(content_length: ContentLength) -> Fact {
         Fact {
-            status: StatusCode::Ok,
+            status: 200,
             duration: Duration::new(0, 0),
             content_length,
         }
