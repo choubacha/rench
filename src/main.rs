@@ -1,9 +1,9 @@
 extern crate clap;
-extern crate reqwest;
+extern crate futures;
 extern crate hyper;
 extern crate hyper_tls;
+extern crate reqwest;
 extern crate tokio_core;
-extern crate futures;
 
 use clap::{App, Arg};
 use std::thread;
@@ -158,9 +158,7 @@ fn main() {
         .parse::<usize>()
         .expect("Expected valid number for number of requests");
 
-    let engine_kind = matches
-        .value_of("engine")
-        .unwrap_or("reqwest");
+    let engine_kind = matches.value_of("engine").unwrap_or("reqwest");
 
     let (sender, receiver) = channel::<Message<Fact>>();
 
@@ -171,7 +169,7 @@ fn main() {
         .into_iter()
         .map(|work| {
             let eng = match engine_kind {
-                "hyper"   => engine::Engine::new(urls.clone(), work).with_hyper(),
+                "hyper" => engine::Engine::new(urls.clone(), work).with_hyper(),
                 "reqwest" | _ => engine::Engine::new(urls.clone(), work),
             };
             let tx = sender.clone();
