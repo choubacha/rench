@@ -1,4 +1,5 @@
 extern crate clap;
+extern crate curl;
 extern crate futures;
 extern crate hyper;
 extern crate hyper_tls;
@@ -135,7 +136,7 @@ fn main() {
                 .long("engine")
                 .short("e")
                 .takes_value(true)
-                .possible_values(&["hyper", "reqwest"])
+                .possible_values(&["curl", "hyper", "reqwest"])
                 .help("The engine to use"),
         )
         .get_matches();
@@ -170,6 +171,7 @@ fn main() {
         .map(|work| {
             let eng = match engine_kind {
                 "hyper" => engine::Engine::new(urls.clone(), work).with_hyper(),
+                "curl" => engine::Engine::new(urls.clone(), work).with_curl(),
                 "reqwest" | _ => engine::Engine::new(urls.clone(), work),
             };
             let tx = sender.clone();

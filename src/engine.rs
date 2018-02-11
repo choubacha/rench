@@ -13,6 +13,7 @@ pub struct Engine {
 enum EngineKind {
     Reqwest,
     Hyper,
+    Curl,
 }
 
 impl Engine {
@@ -29,6 +30,11 @@ impl Engine {
         self
     }
 
+    pub fn with_curl(mut self) -> Self {
+        self.kind = EngineKind::Curl;
+        self
+    }
+
     pub fn run<F>(self, f: F)
     where
         F: FnMut(Fact),
@@ -36,6 +42,7 @@ impl Engine {
         match &self.kind {
             &EngineKind::Reqwest => self.run_reqwest(f),
             &EngineKind::Hyper => self.run_hyper(f),
+            &EngineKind::Curl => self.run_curl(f),
         };
     }
 
@@ -112,6 +119,32 @@ impl Engine {
             ));
         }
     }
+
+    fn run_curl<F>(&self, mut f: F)
+    where
+        F: FnMut(Fact),
+    {
+        use curl::easy::Easy;
+        let clients: Vec<Easy> = self.urls
+            .iter()
+            .map(|url| {
+                let mut easy = Easy::new();
+                easy.url(url).unwrap();
+                easy
+            })
+            .collect();
+
+
+        for n in 0..self.requests {
+            let client = &clients[n % clients.len()];
+            let ((), duration) = bench::time_it(|| client.perform().unwrap());
+            f(Fact::record(
+                ContentLength::new(0),
+                200,
+                duration,
+            ));
+        }
+    }
 }
 
 #[cfg(test)]
@@ -129,6 +162,14 @@ mod tests {
     #[test]
     fn hyper_engine_can_collect_facts() {
         let eng = Engine::new(vec!["https://www.google.com".to_string()], 1).with_hyper();
+        let mut fact: Option<Fact> = None;
+        eng.run(|f| fact = Some(f));
+        assert!(fact.is_some());
+    }
+
+    #[test]
+    fn curl_engine_can_collect_facts() {
+        let eng = Engine::new(vec!["https://www.google.com".to_string()], 1).with_curl();
         let mut fact: Option<Fact> = None;
         eng.run(|f| fact = Some(f));
         assert!(fact.is_some());
