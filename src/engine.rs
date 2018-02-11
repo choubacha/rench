@@ -13,6 +13,7 @@ pub struct Engine {
 enum EngineKind {
     Reqwest,
     Hyper,
+    Curl,
 }
 
 impl Engine {
@@ -20,7 +21,7 @@ impl Engine {
         Engine {
             urls,
             requests,
-            kind: EngineKind::Reqwest
+            kind: EngineKind::Reqwest,
         }
     }
 
@@ -29,14 +30,26 @@ impl Engine {
         self
     }
 
-    pub fn run<F>(self, f: F) where F: FnMut(Fact) {
+    pub fn with_curl(mut self) -> Self {
+        self.kind = EngineKind::Curl;
+        self
+    }
+
+    pub fn run<F>(self, f: F)
+    where
+        F: FnMut(Fact),
+    {
         match &self.kind {
             &EngineKind::Reqwest => self.run_reqwest(f),
             &EngineKind::Hyper => self.run_hyper(f),
+            &EngineKind::Curl => self.run_curl(f),
         };
     }
 
-    fn run_reqwest<F>(&self, mut f: F) where F: FnMut(Fact) {
+    fn run_reqwest<F>(&self, mut f: F)
+    where
+        F: FnMut(Fact),
+    {
         use reqwest::{header, Client, Method, Request};
         let client = Client::new();
 
@@ -56,12 +69,19 @@ impl Engine {
                 .map(|len| **len)
                 .unwrap_or(0);
 
-            f(Fact::record(ContentLength::new(len), resp.status().as_u16(), duration));
+            f(Fact::record(
+                ContentLength::new(len),
+                resp.status().as_u16(),
+                duration,
+            ));
         }
     }
 
-    fn run_hyper<F>(&self, mut f: F) where F: FnMut(Fact) {
-        use hyper::{header, Client, Request, Method, Uri};
+    fn run_hyper<F>(&self, mut f: F)
+    where
+        F: FnMut(Fact),
+    {
+        use hyper::{header, Client, Method, Request, Uri};
         use hyper_tls::HttpsConnector;
         use tokio_core::reactor::Core;
         use futures::{Future, Stream};
@@ -76,19 +96,53 @@ impl Engine {
 
         for n in 0..self.requests {
             let uri = &urls[n % urls.len()];
-            let request = client.request(Request::new(Method::Get, uri.clone()))
+            let request = client
+                .request(Request::new(Method::Get, uri.clone()))
                 .and_then(|response| {
                     let status = response.status().as_u16();
-                    let content_length = response.headers()
+                    let content_length = response
+                        .headers()
                         .get::<header::ContentLength>()
                         .map(|len| len.0)
                         .unwrap_or(0);
-                    response.body()
+                    response
+                        .body()
                         .concat2()
                         .map(move |_| (status, content_length))
-                 });
-            let ((status, content_length), duration) = bench::time_it(|| core.run(request).expect("reactor run"));
-            f(Fact::record(ContentLength::new(content_length), status, duration));
+                });
+            let ((status, content_length), duration) =
+                bench::time_it(|| core.run(request).expect("reactor run"));
+            f(Fact::record(
+                ContentLength::new(content_length),
+                status,
+                duration,
+            ));
+        }
+    }
+
+    fn run_curl<F>(&self, mut f: F)
+    where
+        F: FnMut(Fact),
+    {
+        use curl::easy::Easy;
+        let clients: Vec<Easy> = self.urls
+            .iter()
+            .map(|url| {
+                let mut easy = Easy::new();
+                easy.url(url).unwrap();
+                easy
+            })
+            .collect();
+
+
+        for n in 0..self.requests {
+            let client = &clients[n % clients.len()];
+            let ((), duration) = bench::time_it(|| client.perform().unwrap());
+            f(Fact::record(
+                ContentLength::new(0),
+                200,
+                duration,
+            ));
         }
     }
 }
@@ -108,6 +162,14 @@ mod tests {
     #[test]
     fn hyper_engine_can_collect_facts() {
         let eng = Engine::new(vec!["https://www.google.com".to_string()], 1).with_hyper();
+        let mut fact: Option<Fact> = None;
+        eng.run(|f| fact = Some(f));
+        assert!(fact.is_some());
+    }
+
+    #[test]
+    fn curl_engine_can_collect_facts() {
+        let eng = Engine::new(vec!["https://www.google.com".to_string()], 1).with_curl();
         let mut fact: Option<Fact> = None;
         eng.run(|f| fact = Some(f));
         assert!(fact.is_some());
