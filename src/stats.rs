@@ -2,6 +2,7 @@ use std::time::Duration;
 use std::{cmp, fmt};
 use chart::Chart;
 use content_length::ContentLength;
+use std::collections::HashMap;
 
 trait ToMilliseconds {
     fn to_ms(&self) -> f64;
@@ -114,6 +115,7 @@ pub struct Summary {
     content_length: ContentLength,
     percentiles: Vec<Duration>,
     latency_histogram: Vec<u32>,
+    status_counts: HashMap<u16, u32>,
 }
 
 impl Summary {
@@ -123,10 +125,23 @@ impl Summary {
         }
         let content_length = Self::total_content_length(&facts);
         let count = facts.len() as u32;
+        let status_counts = facts.iter().fold(
+            HashMap::with_capacity(699),
+            |mut acc: HashMap<u16, u32>, fact| {
+                let count = if let Some(current) = acc.get(&fact.status) {
+                    current + 1
+                } else {
+                    1
+                };
+                acc.insert(fact.status, count);
+                acc
+            },
+        );
 
         Summary {
             count,
             content_length,
+            status_counts,
             ..Summary::from_durations(DurationStats::from_facts(&facts))
         }
     }
@@ -160,6 +175,7 @@ impl Summary {
             content_length: ContentLength::zero(),
             percentiles: vec![Duration::new(0, 0); 100],
             latency_histogram: vec![0; 0],
+            status_counts: HashMap::new(),
         }
     }
 
@@ -179,6 +195,13 @@ impl fmt::Display for Summary {
         writeln!(f, "  Shortest:  {} ms", self.min.to_ms())?;
         writeln!(f, "  Requests:  {}", self.count)?;
         writeln!(f, "  Data:      {}", self.content_length)?;
+        writeln!(f, "")?;
+        writeln!(f, "Status codes:")?;
+        let mut status_counts: Vec<(&u16, &u32)> = self.status_counts.iter().collect();
+        status_counts.sort_by(|&(&code_a, _), &(&code_b, _)| code_a.cmp(&code_b));
+        for (k, v) in status_counts {
+            writeln!(f, "  {}: {}", k, v)?;
+        }
         writeln!(f, "")?;
         writeln!(f, "Latency Percentiles (2% of requests per bar):")?;
         let percentiles: Vec<f64> = self.percentiles.iter().map(|d| d.to_ms()).collect();
@@ -207,6 +230,14 @@ mod summary_tests {
             status: 200,
             duration: Duration::new(0, 0),
             content_length,
+        }
+    }
+
+    fn zero_length_instant_fact(status: u16) -> Fact {
+        Fact {
+            status,
+            duration: Duration::new(0, 0),
+            content_length: ContentLength::zero(),
         }
     }
 
@@ -315,5 +346,21 @@ mod summary_tests {
             .collect();
         let summary = Summary::from_facts(&facts);
         assert_eq!(summary.content_length.bytes(), 500);
+    }
+
+    #[test]
+    fn counts_status_codes() {
+        let facts: Vec<Fact> = vec![
+            zero_length_instant_fact(200),
+            zero_length_instant_fact(202),
+            zero_length_instant_fact(200),
+            zero_length_instant_fact(400),
+            zero_length_instant_fact(200),
+            zero_length_instant_fact(404),
+            zero_length_instant_fact(200),
+            zero_length_instant_fact(504),
+        ];
+        let summary = Summary::from_facts(&facts);
+        assert_eq!(summary.status_counts.get(&200), Some(&4));
     }
 }
