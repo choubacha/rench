@@ -53,7 +53,11 @@ impl Engine {
         use reqwest::{Client, Method, Request};
         let client = Client::new();
 
-        let method = if self.is_head { Method::Head } else { Method::Get };
+        let method = if self.is_head {
+            Method::Head
+        } else {
+            Method::Get
+        };
 
         for n in 0..self.requests {
             let url = &self.urls[n % self.urls.len()];
@@ -95,7 +99,11 @@ impl Engine {
 
         let urls: Vec<Uri> = self.urls.iter().map(|url| url.parse().unwrap()).collect();
 
-        let method = if self.is_head { Method::Head } else { Method::Get };
+        let method = if self.is_head {
+            Method::Head
+        } else {
+            Method::Get
+        };
 
         for n in 0..self.requests {
             let uri = &urls[n % urls.len()];
