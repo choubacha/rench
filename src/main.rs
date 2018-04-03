@@ -131,6 +131,12 @@ fn main() {
                 .help("The number of requests in total to make"),
         )
         .arg(
+            Arg::with_name("head-requests")
+                .short("i")
+                .long("head")
+                .help("The issue head requests instead of get")
+        )
+        .arg(
             Arg::with_name("engine")
                 .long("engine")
                 .short("e")
@@ -164,6 +170,8 @@ fn main() {
 
     let rec_handle = thread::spawn(move || recv_messages(receiver, requests, threads));
 
+    let is_head_requests = matches.is_present("head-requests");
+
     println!("Beginning requests");
     let handles: Vec<thread::JoinHandle<()>> = distribute_work(threads, requests)
         .into_iter()
@@ -172,6 +180,7 @@ fn main() {
                 "hyper" => engine::Engine::new(urls.clone(), work).with_hyper(),
                 "reqwest" | _ => engine::Engine::new(urls.clone(), work),
             };
+            let eng = eng.set_to_head(is_head_requests);
             let tx = sender.clone();
             thread::spawn(move || make_requests(eng, tx))
         })

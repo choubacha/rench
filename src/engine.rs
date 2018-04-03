@@ -6,6 +6,7 @@ use content_length::ContentLength;
 pub struct Engine {
     urls: Vec<String>,
     requests: usize,
+    is_head: bool,
     kind: EngineKind,
 }
 
@@ -20,8 +21,14 @@ impl Engine {
         Engine {
             urls,
             requests,
+            is_head: false,
             kind: EngineKind::Reqwest,
         }
+    }
+
+    pub fn set_to_head(mut self, is_head: bool) -> Self {
+        self.is_head = is_head;
+        self
     }
 
     pub fn with_hyper(mut self) -> Self {
@@ -46,10 +53,12 @@ impl Engine {
         use reqwest::{header, Client, Method, Request};
         let client = Client::new();
 
+        let method = if self.is_head { Method::Head } else { Method::Get };
+
         for n in 0..self.requests {
             let url = &self.urls[n % self.urls.len()];
 
-            let request = Request::new(Method::Get, url.parse().expect("Invalid url"));
+            let request = Request::new(method.clone(), url.parse().expect("Invalid url"));
             let (resp, duration) = bench::time_it(|| {
                 let mut resp = client
                     .execute(request)
@@ -87,10 +96,12 @@ impl Engine {
 
         let urls: Vec<Uri> = self.urls.iter().map(|url| url.parse().unwrap()).collect();
 
+        let method = if self.is_head { Method::Head } else { Method::Get };
+
         for n in 0..self.requests {
             let uri = &urls[n % urls.len()];
             let request = client
-                .request(Request::new(Method::Get, uri.clone()))
+                .request(Request::new(method.clone(), uri.clone()))
                 .and_then(|response| {
                     let status = response.status().as_u16();
                     let content_length = response
