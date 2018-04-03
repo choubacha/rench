@@ -50,7 +50,7 @@ impl Engine {
     where
         F: FnMut(Fact),
     {
-        use reqwest::{header, Client, Method, Request};
+        use reqwest::{Client, Method, Request};
         let client = Client::new();
 
         let method = if self.is_head { Method::Head } else { Method::Get };
@@ -59,20 +59,19 @@ impl Engine {
             let url = &self.urls[n % self.urls.len()];
 
             let request = Request::new(method.clone(), url.parse().expect("Invalid url"));
+            let mut len = 0;
             let (resp, duration) = bench::time_it(|| {
                 let mut resp = client
                     .execute(request)
                     .expect("Failure to even connect is no good");
-                let _ = resp.text();
+                if let Ok(body) = resp.text() {
+                    len = body.len();
+                }
                 resp
             });
-            let len = resp.headers()
-                .get::<header::ContentLength>()
-                .map(|len| **len)
-                .unwrap_or(0);
 
             f(Fact::record(
-                ContentLength::new(len),
+                ContentLength::new(len as u64),
                 resp.status().as_u16(),
                 duration,
             ));
@@ -83,7 +82,7 @@ impl Engine {
     where
         F: FnMut(Fact),
     {
-        use hyper::{header, Client, Method, Request, Uri};
+        use hyper::{Client, Method, Request, Uri};
         use hyper_tls::HttpsConnector;
         use tokio_core::reactor::Core;
         use futures::{Future, Stream};
@@ -104,15 +103,10 @@ impl Engine {
                 .request(Request::new(method.clone(), uri.clone()))
                 .and_then(|response| {
                     let status = response.status().as_u16();
-                    let content_length = response
-                        .headers()
-                        .get::<header::ContentLength>()
-                        .map(|len| len.0)
-                        .unwrap_or(0);
                     response
                         .body()
                         .concat2()
-                        .map(move |_| (status, content_length))
+                        .map(move |body| (status, body.len() as u64))
                 });
             let ((status, content_length), duration) =
                 bench::time_it(|| core.run(request).expect("reactor run"));
