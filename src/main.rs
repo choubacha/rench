@@ -134,7 +134,7 @@ fn main() {
             Arg::with_name("head-requests")
                 .short("i")
                 .long("head")
-                .help("The issue head requests instead of get")
+                .help("The issue head requests instead of get"),
         )
         .arg(
             Arg::with_name("engine")
