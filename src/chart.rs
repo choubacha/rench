@@ -1,3 +1,4 @@
+/// A chart that can be used to render some set of data.
 pub struct Chart {
     height: u32,
     full: char,
@@ -6,6 +7,7 @@ pub struct Chart {
 }
 
 impl Chart {
+    /// Creates a new chart.
     pub fn new() -> Chart {
         Chart {
             height: 10,
@@ -15,36 +17,38 @@ impl Chart {
         }
     }
 
+    /// Configure the height of the chart.
     pub fn height(mut self, h: u32) -> Chart {
         self.height = h;
         self
     }
 
-    pub fn make<N>(&self, data: &Vec<N>) -> String
+    /// Build the chart into a string.
+    pub fn make<N>(&self, data: &[N]) -> String
     where
         N: Into<f64> + Clone,
     {
         let data: Vec<f64> = data.into_iter().map(|d| d.clone().into()).collect();
         let (min, max): (f64, f64) = data.iter().fold((0., 0.), |(min, max), datum| {
-            let datum = datum.clone();
+            let datum = *datum;
             (
                 if datum < min { datum } else { min },
                 if max < datum { datum } else { max },
             )
         });
-        let row_increment = (max - min) / self.height as f64;
+        let row_increment = (max - min) / f64::from(self.height);
         let mut ret = String::with_capacity(self.height as usize * data.len() * 2);
         for row in 0..self.height {
-            let floor = max - ((row + 1) as f64 * row_increment);
+            let floor = max - (f64::from(row + 1) * row_increment);
             for datum in &data {
                 ret.push(if *datum > floor {
                     if *datum > (floor + row_increment / 2.) {
-                        self.full.clone()
+                        self.full
                     } else {
-                        self.half_full.clone()
+                        self.half_full
                     }
                 } else {
-                    self.space.clone()
+                    self.space
                 });
             }
             if row == 0 {

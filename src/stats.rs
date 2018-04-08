@@ -10,7 +10,7 @@ trait ToMilliseconds {
 
 impl ToMilliseconds for Duration {
     fn to_ms(&self) -> f64 {
-        (self.as_secs() as f64 * 1_000f64) + (self.subsec_nanos() as f64 / 1_000_000f64)
+        (self.as_secs() as f64 * 1_000f64) + (f64::from(self.subsec_nanos()) / 1_000_000f64)
     }
 }
 
@@ -24,6 +24,7 @@ mod millisecond_tests {
     }
 }
 
+/// A single datum or "fact" about the requests
 #[derive(Debug)]
 pub struct Fact {
     status: u16,
@@ -47,17 +48,17 @@ struct DurationStats {
 
 impl DurationStats {
     fn from_facts(facts: &[Fact]) -> DurationStats {
-        let mut sorted: Vec<Duration> = facts.iter().map(|f| f.duration.clone()).collect();
+        let mut sorted: Vec<Duration> = facts.iter().map(|f| f.duration).collect();
         sorted.sort();
         Self { sorted }
     }
 
     fn max(&self) -> Option<Duration> {
-        self.sorted.last().map(|d| *d)
+        self.sorted.last().cloned()
     }
 
     fn min(&self) -> Option<Duration> {
-        self.sorted.first().map(|d| *d)
+        self.sorted.first().cloned()
     }
 
     fn median(&self) -> Duration {
@@ -72,7 +73,7 @@ impl DurationStats {
     }
 
     fn average(&self) -> Duration {
-        self.total() / self.sorted.len() as u32
+        self.total() / (self.sorted.len() as u32)
     }
 
     fn latency_histogram(&self) -> Vec<u32> {
@@ -92,7 +93,7 @@ impl DurationStats {
     fn percentiles(&self) -> Vec<Duration> {
         (0..50)
             .map(|n| {
-                let mut index = ((n as f64 / 50.0) * self.sorted.len() as f64) as usize;
+                let mut index = ((f64::from(n) / 50.0) * (self.sorted.len() as f64)) as usize;
                 index = cmp::max(index, 0);
                 index = cmp::min(index, self.sorted.len() - 1);
                 self.sorted[index]
@@ -105,6 +106,7 @@ impl DurationStats {
     }
 }
 
+/// Represents the statistics around a given set of facts.
 #[derive(Debug)]
 pub struct Summary {
     average: Duration,
@@ -119,8 +121,9 @@ pub struct Summary {
 }
 
 impl Summary {
+    /// From a set of facts, calculate the statistics.
     pub fn from_facts(facts: &[Fact]) -> Summary {
-        if facts.len() == 0 {
+        if facts.is_empty() {
             return Summary::zero();
         }
         let content_length = Self::total_content_length(&facts);
@@ -142,11 +145,11 @@ impl Summary {
             count,
             content_length,
             status_counts,
-            ..Summary::from_durations(DurationStats::from_facts(&facts))
+            ..Summary::from_durations(&DurationStats::from_facts(&facts))
         }
     }
 
-    fn from_durations(stats: DurationStats) -> Summary {
+    fn from_durations(stats: &DurationStats) -> Summary {
         let average = stats.average();
         let median = stats.median();
         let min = stats.min().expect("Returned early if empty");
@@ -195,18 +198,18 @@ impl fmt::Display for Summary {
         writeln!(f, "  Shortest:  {} ms", self.min.to_ms())?;
         writeln!(f, "  Requests:  {}", self.count)?;
         writeln!(f, "  Data:      {}", self.content_length)?;
-        writeln!(f, "")?;
+        writeln!(f)?;
         writeln!(f, "Status codes:")?;
         let mut status_counts: Vec<(&u16, &u32)> = self.status_counts.iter().collect();
         status_counts.sort_by(|&(&code_a, _), &(&code_b, _)| code_a.cmp(&code_b));
         for (k, v) in status_counts {
             writeln!(f, "  {}: {}", k, v)?;
         }
-        writeln!(f, "")?;
+        writeln!(f)?;
         writeln!(f, "Latency Percentiles (2% of requests per bar):")?;
         let percentiles: Vec<f64> = self.percentiles.iter().map(|d| d.to_ms()).collect();
         writeln!(f, "{}", Chart::new().make(&percentiles))?;
-        writeln!(f, "")?;
+        writeln!(f)?;
         writeln!(f, "Latency Histogram (each bar is 2% of max latency)")?;
         writeln!(f, "{}", Chart::new().make(&self.latency_histogram))?;
         Ok(())

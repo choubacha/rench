@@ -2,61 +2,76 @@ use bench;
 use stats::Fact;
 use content_length::ContentLength;
 
+/// The engine of making requests. The engine implements making the requests and producing
+/// facts for the stats collector to process.
 #[derive(Clone)]
 pub struct Engine {
     urls: Vec<String>,
     requests: usize,
-    is_head: bool,
-    kind: EngineKind,
+    method: Method,
+    kind: Kind,
 }
 
-#[derive(Clone)]
-enum EngineKind {
+/// The methods that are supported by the current implementations. These are currently
+/// body-less methods so that we don't need to load up any additional content.
+#[derive(Clone, Copy)]
+pub enum Method {
+    Get,
+    Head,
+}
+const DEFAULT_METHOD: Method = Method::Get;
+
+#[derive(Clone, Copy)]
+enum Kind {
     Reqwest,
     Hyper,
 }
+const DEFAULT_KIND: Kind = Kind::Reqwest;
 
 impl Engine {
+    /// Creates a new engine. The engine will default to using `reqwest`
     pub fn new(urls: Vec<String>, requests: usize) -> Engine {
         Engine {
             urls,
             requests,
-            is_head: false,
-            kind: EngineKind::Reqwest,
+            method: DEFAULT_METHOD,
+            kind: DEFAULT_KIND,
         }
     }
 
-    pub fn set_to_head(mut self, is_head: bool) -> Self {
-        self.is_head = is_head;
+    /// Sets the method to use with the requests
+    pub fn with_method(mut self, method: Method) -> Self {
+        self.method = method;
         self
     }
 
     pub fn with_hyper(mut self) -> Self {
-        self.kind = EngineKind::Hyper;
+        self.kind = Kind::Hyper;
         self
     }
 
-    pub fn run<F>(self, f: F)
+    /// Consumes self to start up the engine and begins making requests. It will callback
+    /// to the collector to allow the caller to capture requests.
+    pub fn run<F>(self, collect: F)
     where
         F: FnMut(Fact),
     {
-        match &self.kind {
-            &EngineKind::Reqwest => self.run_reqwest(f),
-            &EngineKind::Hyper => self.run_hyper(f),
+        match self.kind {
+            Kind::Reqwest => self.run_reqwest(collect),
+            Kind::Hyper => self.run_hyper(collect),
         };
     }
 
-    fn run_reqwest<F>(&self, mut f: F)
+    fn run_reqwest<F>(&self, mut collect: F)
     where
         F: FnMut(Fact),
     {
-        use reqwest::{Client, Method, Request};
+        use reqwest::{self, Client, Request};
         let client = Client::new();
 
-        let method = if self.is_head {
-            Method::Head
-        } else {
-            Method::Get
+        let method = match self.method {
+            Method::Get => reqwest::Method::Get,
+            Method::Head => reqwest::Method::Head,
         };
 
         for n in 0..self.requests {
@@ -74,7 +89,7 @@ impl Engine {
                 resp
             });
 
-            f(Fact::record(
+            collect(Fact::record(
                 ContentLength::new(len as u64),
                 resp.status().as_u16(),
                 duration,
@@ -82,11 +97,11 @@ impl Engine {
         }
     }
 
-    fn run_hyper<F>(&self, mut f: F)
+    fn run_hyper<F>(&self, mut collect: F)
     where
         F: FnMut(Fact),
     {
-        use hyper::{Client, Method, Request, Uri};
+        use hyper::{self, Client, Request, Uri};
         use hyper_tls::HttpsConnector;
         use tokio_core::reactor::Core;
         use futures::{Future, Stream};
@@ -99,10 +114,9 @@ impl Engine {
 
         let urls: Vec<Uri> = self.urls.iter().map(|url| url.parse().unwrap()).collect();
 
-        let method = if self.is_head {
-            Method::Head
-        } else {
-            Method::Get
+        let method = match self.method {
+            Method::Get => hyper::Method::Get,
+            Method::Head => hyper::Method::Head,
         };
 
         for n in 0..self.requests {
@@ -118,7 +132,7 @@ impl Engine {
                 });
             let ((status, content_length), duration) =
                 bench::time_it(|| core.run(request).expect("reactor run"));
-            f(Fact::record(
+            collect(Fact::record(
                 ContentLength::new(content_length),
                 status,
                 duration,
