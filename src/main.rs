@@ -17,7 +17,7 @@ mod engine;
 mod bench;
 use stats::{Fact, Summary};
 
-fn make_requests(eng: engine::Engine, sender: Sender<Message<Fact>>) {
+fn make_requests(eng: engine::Engine, sender: &Sender<Message<Fact>>) {
     eng.run(|fact| {
         sender
             .send(Message::Body(fact))
@@ -61,7 +61,7 @@ enum Message<T> {
 }
 
 fn recv_messages<T>(
-    rx: Receiver<Message<T>>,
+    rx: &Receiver<Message<T>>,
     expected_message_count: usize,
     sender_count: usize,
 ) -> Vec<T> {
@@ -90,7 +90,7 @@ mod message_collection_tests {
     #[test]
     fn it_ends_when_all_nones_are_received() {
         let (tx, rx) = channel::<Message<usize>>();
-        let handle = thread::spawn(move || recv_messages(rx, 0, 4));
+        let handle = thread::spawn(move || recv_messages(&rx, 0, 4));
         for _ in 0..4 {
             let _ = tx.send(Message::EOF);
         }
@@ -100,7 +100,7 @@ mod message_collection_tests {
     #[test]
     fn it_collects_all_data_received() {
         let (tx, rx) = channel::<Message<usize>>();
-        let handle = thread::spawn(move || recv_messages(rx, 0, 1));
+        let handle = thread::spawn(move || recv_messages(&rx, 0, 1));
         for n in 0..5 {
             let _ = tx.send(Message::Body(n as usize));
         }
@@ -168,7 +168,7 @@ fn main() {
 
     let (sender, receiver) = channel::<Message<Fact>>();
 
-    let rec_handle = thread::spawn(move || recv_messages(receiver, requests, threads));
+    let rec_handle = thread::spawn(move || recv_messages(&receiver, requests, threads));
 
     let is_head_requests = matches.is_present("head-requests");
 
@@ -176,13 +176,15 @@ fn main() {
     let handles: Vec<thread::JoinHandle<()>> = distribute_work(threads, requests)
         .into_iter()
         .map(|work| {
-            let eng = match engine_kind {
+            let mut eng = match engine_kind {
                 "hyper" => engine::Engine::new(urls.clone(), work).with_hyper(),
                 "reqwest" | _ => engine::Engine::new(urls.clone(), work),
             };
-            let eng = eng.set_to_head(is_head_requests);
+            if is_head_requests {
+                eng = eng.with_method(engine::Method::Head);
+            }
             let tx = sender.clone();
-            thread::spawn(move || make_requests(eng, tx))
+            thread::spawn(move || make_requests(eng, &tx))
         })
         .collect();
 
@@ -192,12 +194,13 @@ fn main() {
             .for_each(|h| h.join().expect("Sending thread to finish"));
     });
     let facts = rec_handle.join().expect("Receiving thread to finish");
-    let seconds = duration.as_secs() as f64 + (duration.subsec_nanos() as f64 / 1_000_000_000f64);
+    let seconds =
+        duration.as_secs() as f64 + (f64::from(duration.subsec_nanos()) / 1_000_000_000f64);
 
     println!("Finished!");
-    println!("");
+    println!();
     println!("Took {} seconds", seconds);
     println!("{} requests / second", requests as f64 / seconds);
-    println!("");
+    println!();
     println!("{}", Summary::from_facts(&facts));
 }
