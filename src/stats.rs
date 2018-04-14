@@ -77,10 +77,10 @@ impl DurationStats {
     }
 
     fn latency_histogram(&self) -> Vec<u32> {
-        let mut latency_histogram = vec![0; 50];
+        let mut latency_histogram = vec![0; 100];
 
         if let Some(max) = self.max() {
-            let bin_size = max.to_ms() / 50.;
+            let bin_size = max.to_ms() / 100.;
 
             for duration in &self.sorted {
                 let index = (duration.to_ms() / bin_size) as usize;
@@ -91,9 +91,9 @@ impl DurationStats {
     }
 
     fn percentiles(&self) -> Vec<Duration> {
-        (0..50)
+        (0..100)
             .map(|n| {
-                let mut index = ((f64::from(n) / 50.0) * (self.sorted.len() as f64)) as usize;
+                let mut index = ((f64::from(n) / 100.0) * (self.sorted.len() as f64)) as usize;
                 index = cmp::max(index, 0);
                 index = cmp::min(index, self.sorted.len() - 1);
                 self.sorted[index]
@@ -104,6 +104,14 @@ impl DurationStats {
     fn total(&self) -> Duration {
         self.sorted.iter().sum()
     }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum ChartSize {
+    None,
+    Small,
+    Medium,
+    Large,
 }
 
 /// Represents the statistics around a given set of facts.
@@ -118,6 +126,7 @@ pub struct Summary {
     percentiles: Vec<Duration>,
     latency_histogram: Vec<u32>,
     status_counts: HashMap<u16, u32>,
+    chart_size: ChartSize,
 }
 
 impl Summary {
@@ -147,6 +156,11 @@ impl Summary {
             status_counts,
             ..Summary::from_durations(&DurationStats::from_facts(&facts))
         }
+    }
+
+    pub fn with_chart_size(mut self, size: ChartSize) -> Self {
+        self.chart_size = size;
+        self
     }
 
     fn from_durations(stats: &DurationStats) -> Summary {
@@ -179,6 +193,7 @@ impl Summary {
             percentiles: vec![Duration::new(0, 0); 100],
             latency_histogram: vec![0; 0],
             status_counts: HashMap::new(),
+            chart_size: ChartSize::Medium,
         }
     }
 
@@ -186,6 +201,46 @@ impl Summary {
         facts.iter().fold(ContentLength::zero(), |len, fact| {
             len + &fact.content_length
         })
+    }
+
+    fn chart<T>(&self, vec: &[T]) -> String
+    where
+        T: Copy + Into<f64>,
+    {
+        let (height, scale) = match self.chart_size {
+            ChartSize::None => return String::new(),
+            ChartSize::Small => (7, 3),
+            ChartSize::Medium => (10, 2),
+            ChartSize::Large => (20, 1),
+        };
+        use stats::scale_array;
+        format!(
+            "{}",
+            Chart::new().height(height).make(&scale_array(&vec, scale))
+        )
+    }
+}
+
+fn scale_array<T>(vec: &[T], scale_array: usize) -> Vec<T>
+where
+    T: Copy,
+{
+    vec.iter()
+        .enumerate()
+        .filter(|&(i, _)| i % scale_array == 0)
+        .map(|(_, v)| *v)
+        .collect()
+}
+
+#[cfg(test)]
+mod scale_array_tests {
+    use super::*;
+
+    #[test]
+    fn it_scale_arrays_an_array() {
+        let vec = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
+        assert_eq!(scale_array(&vec, 2), vec![1, 3, 5, 7, 9]);
+        assert_eq!(scale_array(&vec, 3), vec![1, 4, 7]);
     }
 }
 
@@ -205,13 +260,15 @@ impl fmt::Display for Summary {
         for (k, v) in status_counts {
             writeln!(f, "  {}: {}", k, v)?;
         }
-        writeln!(f)?;
-        writeln!(f, "Latency Percentiles (2% of requests per bar):")?;
-        let percentiles: Vec<f64> = self.percentiles.iter().map(|d| d.to_ms()).collect();
-        writeln!(f, "{}", Chart::new().make(&percentiles))?;
-        writeln!(f)?;
-        writeln!(f, "Latency Histogram (each bar is 2% of max latency)")?;
-        writeln!(f, "{}", Chart::new().make(&self.latency_histogram))?;
+        if self.chart_size != ChartSize::None {
+            writeln!(f)?;
+            writeln!(f, "Latency Percentiles (2% of requests per bar):")?;
+            let percentiles: Vec<f64> = self.percentiles.iter().map(|d| d.to_ms()).collect();
+            writeln!(f, "{}", self.chart(&percentiles))?;
+            writeln!(f)?;
+            writeln!(f, "Latency Histogram (each bar is 2% of max latency)")?;
+            writeln!(f, "{}", self.chart(&self.latency_histogram))?;
+        }
         Ok(())
     }
 }
@@ -310,10 +367,10 @@ mod summary_tests {
             .collect();
         let summary = Summary::from_facts(&facts);
 
-        assert_eq!(summary.latency_histogram.len(), 50);
-        assert_eq!(summary.latency_histogram.first(), Some(&10));
-        assert_eq!(summary.latency_histogram.last(), Some(&10));
-        assert_eq!(summary.latency_histogram[25], 10);
+        assert_eq!(summary.latency_histogram.len(), 100);
+        assert_eq!(summary.latency_histogram.first(), Some(&5));
+        assert_eq!(summary.latency_histogram.last(), Some(&0));
+        assert_eq!(summary.latency_histogram[50], 0);
     }
 
     #[test]
@@ -323,10 +380,10 @@ mod summary_tests {
             .collect();
         let summary = Summary::from_facts(&facts);
 
-        assert_eq!(summary.percentiles.len(), 50);
+        assert_eq!(summary.percentiles.len(), 100);
         assert_eq!(summary.percentiles.first(), Some(&Duration::new(0, 0)));
         assert_eq!(summary.percentiles.last(), Some(&Duration::new(49, 0)));
-        assert_eq!(summary.percentiles[25], Duration::new(25, 0));
+        assert_eq!(summary.percentiles[50], Duration::new(25, 0));
     }
 
     #[test]
@@ -336,10 +393,10 @@ mod summary_tests {
             .collect();
         let summary = Summary::from_facts(&facts);
 
-        assert_eq!(summary.percentiles.len(), 50);
+        assert_eq!(summary.percentiles.len(), 100);
         assert_eq!(summary.percentiles.first(), Some(&Duration::new(0, 0)));
-        assert_eq!(summary.percentiles.last(), Some(&Duration::new(490, 0)));
-        assert_eq!(summary.percentiles[25], Duration::new(250, 0));
+        assert_eq!(summary.percentiles.last(), Some(&Duration::new(495, 0)));
+        assert_eq!(summary.percentiles[50], Duration::new(250, 0));
     }
 
     #[test]

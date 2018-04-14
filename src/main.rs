@@ -15,7 +15,7 @@ mod stats;
 mod chart;
 mod engine;
 mod bench;
-use stats::{Fact, Summary};
+use stats::{ChartSize, Fact, Summary};
 
 fn make_requests(eng: engine::Engine, sender: &Sender<Message<Fact>>) {
     eng.run(|fact| {
@@ -144,6 +144,13 @@ fn main() {
                 .possible_values(&["hyper", "reqwest"])
                 .help("The engine to use"),
         )
+        .arg(
+            Arg::with_name("chart-size")
+                .long("chart-size")
+                .takes_value(true)
+                .possible_values(&["none", "n", "small", "s", "medium", "m", "large", "l"])
+                .help("The size of the chart to render"),
+        )
         .get_matches();
 
     let urls: Vec<String> = matches
@@ -171,6 +178,14 @@ fn main() {
     let rec_handle = thread::spawn(move || recv_messages(&receiver, requests, threads));
 
     let is_head_requests = matches.is_present("head-requests");
+
+    let chart_size = match matches.value_of("chart-size").unwrap_or("medium") {
+        "none" | "n" => ChartSize::None,
+        "small" | "s" => ChartSize::Small,
+        "medium" | "m" => ChartSize::Medium,
+        "large" | "l" => ChartSize::Large,
+        _ => unreachable!(),
+    };
 
     println!("Beginning requests");
     let handles: Vec<thread::JoinHandle<()>> = distribute_work(threads, requests)
@@ -202,5 +217,8 @@ fn main() {
     println!("Took {} seconds", seconds);
     println!("{} requests / second", requests as f64 / seconds);
     println!();
-    println!("{}", Summary::from_facts(&facts));
+    println!(
+        "{}",
+        Summary::from_facts(&facts).with_chart_size(chart_size)
+    );
 }

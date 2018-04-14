@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+* Chart size option was added allowing specification of large, medium, small, or none.
+
 ## [0.2.0] - 2018-04-08
 
 ### Added
