@@ -26,7 +26,7 @@ You can change the number of threads and the number of requests to suit your nee
 You can even specify multiple URLs and it will round-robin the requests between them.
 
 ```bash
-$ ./target/release/rench -c 1 --engine=hyper -n 10000 http://0.0.0.0:6767
+$ ./target/release/rench -c 4 --engine=hyper -n 10000 http://0.0.0.0:6767
 Beginning requests
 1000 requests
 2000 requests
@@ -40,41 +40,44 @@ Beginning requests
 10000 requests
 Finished!
 
-Took 1.770175211 seconds
-5649.158308092475 requests / second
+Took 4.813263821 seconds
+2077.5923306697964 requests / second
 
 Summary
-  Average:   0.170058 ms
-  Median:    0.131708 ms
-  Longest:   4.17715 ms
-  Shortest:  0.075699 ms
+  Average:   1.88827 ms
+  Median:    1.012478 ms
+  Longest:   1005.942426 ms
+  Shortest:  0.403114 ms
   Requests:  10000
-  Data:      4.73 MB
+  Data:      234.38 KB
+
+Status codes:
+  200: 10000
 
 Latency Percentiles (2% of requests per bar):
-                                                 ▌ 0.203628
-                                              ▖▖▌▌
-                                  ▖▖▖▖▖▖▖▌▌▌▌▌▌▌▌▌
-                  ▖▖▖▖▖▖▖▖▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌
-      ▖▖▖▖▖▖▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌
- ▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌
-▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌
-▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌
-▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌
+                                                 ▌ 7.399224
+                                                 ▌
+                                                 ▌
+                                                ▌▌
+                                               ▖▌▌
+                                              ▖▌▌▌
+                                             ▖▌▌▌▌
+                                        ▖▖▖▌▌▌▌▌▌▌
+         ▖▖▖▖▖▖▖▖▖▖▖▖▖▖▖▖▖▖▖▖▖▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌
 ▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌ 0
 
 
 Latency Histogram (each bar is 2% of max latency)
- ▌                                                 9328
- ▌
- ▌
- ▌
- ▌
- ▌
- ▌
- ▌
- ▌
-▖▌▌▖ ▖  ▖   ▖▖   ▖  ▖▖▖▖▖▖▖▖▖▖▖▖▖▖▖▖   ▖  ▖▖▖▖ ▖▖▖ 0
+▌                                                  9862
+▌
+▌
+▌
+▌
+▌
+▌
+▌
+▌
+▌▖                                                 0
 ```
 
 ### Options
