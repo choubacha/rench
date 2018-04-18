@@ -10,9 +10,20 @@ A benchmark utility for end points. Written in rust... rust + bench = rench
 
 # Installation
 
+### From Source
+Clone or fork the repo and run the following:
+
 ```
 cargo install -f
 ```
+
+### From crates
+
+```
+cargo install -f rench
+```
+
+This should install and download from the latest release version.
 
 # Usage
 
