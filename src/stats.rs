@@ -214,10 +214,7 @@ impl Summary {
             ChartSize::Large => (20, 1),
         };
         use stats::scale_array;
-        format!(
-            "{}",
-            Chart::new().height(height).make(&scale_array(&vec, scale))
-        )
+        Chart::new().height(height).make(&scale_array(&vec, scale))
     }
 }
 

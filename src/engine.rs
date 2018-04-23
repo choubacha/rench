@@ -7,7 +7,6 @@ use content_length::ContentLength;
 #[derive(Clone)]
 pub struct Engine {
     urls: Vec<String>,
-    requests: usize,
     method: Method,
     kind: Kind,
 }
@@ -30,10 +29,9 @@ const DEFAULT_KIND: Kind = Kind::Reqwest;
 
 impl Engine {
     /// Creates a new engine. The engine will default to using `reqwest`
-    pub fn new(urls: Vec<String>, requests: usize) -> Engine {
+    pub fn new(urls: Vec<String>) -> Engine {
         Engine {
             urls,
-            requests,
             method: DEFAULT_METHOD,
             kind: DEFAULT_KIND,
         }
@@ -52,17 +50,17 @@ impl Engine {
 
     /// Consumes self to start up the engine and begins making requests. It will callback
     /// to the collector to allow the caller to capture requests.
-    pub fn run<F>(self, collect: F)
+    pub fn run<F>(self, requests: usize, collect: F)
     where
         F: FnMut(Fact),
     {
         match self.kind {
-            Kind::Reqwest => self.run_reqwest(collect),
-            Kind::Hyper => self.run_hyper(collect),
+            Kind::Reqwest => self.run_reqwest(requests, collect),
+            Kind::Hyper => self.run_hyper(requests, collect),
         };
     }
 
-    fn run_reqwest<F>(&self, mut collect: F)
+    fn run_reqwest<F>(&self, requests: usize, mut collect: F)
     where
         F: FnMut(Fact),
     {
@@ -74,7 +72,7 @@ impl Engine {
             Method::Head => reqwest::Method::Head,
         };
 
-        for n in 0..self.requests {
+        for n in 0..requests {
             let url = &self.urls[n % self.urls.len()];
 
             let request = Request::new(method.clone(), url.parse().expect("Invalid url"));
@@ -97,7 +95,7 @@ impl Engine {
         }
     }
 
-    fn run_hyper<F>(&self, mut collect: F)
+    fn run_hyper<F>(&self, requests: usize, mut collect: F)
     where
         F: FnMut(Fact),
     {
@@ -119,7 +117,7 @@ impl Engine {
             Method::Head => hyper::Method::Head,
         };
 
-        for n in 0..self.requests {
+        for n in 0..requests {
             let uri = &urls[n % urls.len()];
             let request = client
                 .request(Request::new(method.clone(), uri.clone()))
@@ -147,17 +145,17 @@ mod tests {
 
     #[test]
     fn reqwest_engine_can_collect_facts() {
-        let eng = Engine::new(vec!["https://www.google.com".to_string()], 1);
+        let eng = Engine::new(vec!["https://www.google.com".to_string()]);
         let mut fact: Option<Fact> = None;
-        eng.run(|f| fact = Some(f));
+        eng.run(1, |f| fact = Some(f));
         assert!(fact.is_some());
     }
 
     #[test]
     fn hyper_engine_can_collect_facts() {
-        let eng = Engine::new(vec!["https://www.google.com".to_string()], 1).with_hyper();
+        let eng = Engine::new(vec!["https://www.google.com".to_string()]).with_hyper();
         let mut fact: Option<Fact> = None;
-        eng.run(|f| fact = Some(f));
+        eng.run(1, |f| fact = Some(f));
         assert!(fact.is_some());
     }
 }
