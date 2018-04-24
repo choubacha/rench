@@ -43,6 +43,7 @@ impl Engine {
         self
     }
 
+    /// Sets the engine to be a hyper engine
     pub fn with_hyper(mut self) -> Self {
         self.kind = Kind::Hyper;
         self

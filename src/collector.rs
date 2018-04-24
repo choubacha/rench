@@ -2,6 +2,10 @@ use std::{cmp, thread, sync::mpsc::{channel, Receiver, Sender}};
 use message::Message;
 use plan::Plan;
 
+/// Kicks off the collector which is a background thread. The collector will capture
+/// all data sent to the sender and then will return on the handle the entire dataset.
+///
+/// The plan is essential to pre-allocating the array.
 pub fn start<T>(plan: Plan) -> (Sender<Message<T>>, thread::JoinHandle<Vec<T>>)
 where
     T: 'static + Send,
