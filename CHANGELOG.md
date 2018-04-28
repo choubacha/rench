@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 
 * Chart size option was added allowing specification of large, medium, small, or none.
+* Added the calculations and renderings of the standard deviation of the request latency.
 
 ## [0.2.0] - 2018-04-08
 

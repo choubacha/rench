@@ -14,6 +14,24 @@ impl ToMilliseconds for Duration {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct MS(f64);
+impl From<Duration> for MS {
+    fn from(d: Duration) -> MS {
+        let ms = (d.as_secs() as f64 * 1_000f64) + (f64::from(d.subsec_nanos()) / 1_000_000f64);
+        MS(ms)
+    }
+}
+
+impl From<MS> for Duration {
+    fn from(ms: MS) -> Duration {
+        let MS(ms) = ms;
+        let duration = Duration::from_millis(ms.trunc() as u64);
+        let nanos = (ms.fract() * 1_000_000f64) as u32;
+        duration + Duration::new(0, nanos)
+    }
+}
+
 #[cfg(test)]
 mod millisecond_tests {
     use super::*;
@@ -21,6 +39,18 @@ mod millisecond_tests {
     #[test]
     fn exchange_duration_to_ms() {
         assert_eq!(Duration::new(1, 500000).to_ms(), 1000.5f64);
+    }
+
+    #[test]
+    fn convert_to_ms() {
+        let ms: MS = Duration::new(1, 500000).into();
+        assert_eq!(ms, MS(1000.5f64));
+    }
+
+    #[test]
+    fn convert_from_ms() {
+        let duration: Duration = MS(1000.5).into();
+        assert_eq!(duration, Duration::new(1, 500000));
     }
 }
 
@@ -76,6 +106,18 @@ impl DurationStats {
         self.total() / (self.sorted.len() as u32)
     }
 
+    fn stddev(&self) -> Duration {
+        let mean = self.average();
+        let MS(mean) = mean.into();
+        let summed_squares = self.sorted.iter().fold(0f64, |acc, duration| {
+            let MS(ms) = (*duration).into();
+            acc + (ms - mean).powi(2)
+        });
+        let ratio = summed_squares / (self.sorted.len() - 1) as f64;
+        let std_ms = ratio.sqrt();
+        MS(std_ms).into()
+    }
+
     fn latency_histogram(&self) -> Vec<u32> {
         let mut latency_histogram = vec![0; 100];
 
@@ -121,6 +163,7 @@ pub struct Summary {
     median: Duration,
     max: Duration,
     min: Duration,
+    stddev: Duration,
     count: u32,
     content_length: ContentLength,
     percentiles: Vec<Duration>,
@@ -165,6 +208,7 @@ impl Summary {
 
     fn from_durations(stats: &DurationStats) -> Summary {
         let average = stats.average();
+        let stddev = stats.stddev();
         let median = stats.median();
         let min = stats.min().expect("Returned early if empty");
         let max = stats.max().expect("Returned early if empty");
@@ -173,6 +217,7 @@ impl Summary {
 
         Summary {
             average,
+            stddev,
             median,
             min,
             max,
@@ -185,6 +230,7 @@ impl Summary {
     fn zero() -> Summary {
         Summary {
             average: Duration::new(0, 0),
+            stddev: Duration::new(0, 0),
             median: Duration::new(0, 0),
             max: Duration::new(0, 0),
             min: Duration::new(0, 0),
@@ -244,7 +290,12 @@ mod scale_array_tests {
 impl fmt::Display for Summary {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "Summary")?;
-        writeln!(f, "  Average:   {} ms", self.average.to_ms())?;
+        writeln!(
+            f,
+            "  Average:   {} ms (std: {} ms)",
+            self.average.to_ms(),
+            self.stddev.to_ms()
+        )?;
         writeln!(f, "  Median:    {} ms", self.median.to_ms())?;
         writeln!(f, "  Longest:   {} ms", self.max.to_ms())?;
         writeln!(f, "  Shortest:  {} ms", self.min.to_ms())?;
@@ -316,6 +367,18 @@ mod summary_tests {
         ];
         let summary = Summary::from_facts(&facts);
         assert_eq!(summary.average, Duration::new(2, 500000000));
+    }
+
+    #[test]
+    fn stddev_the_durations() {
+        let facts = [
+            ok_zero_length_fact(Duration::new(2, 0)),
+            ok_zero_length_fact(Duration::new(1, 0)),
+            ok_zero_length_fact(Duration::new(4, 0)),
+            ok_zero_length_fact(Duration::new(3, 0)),
+        ];
+        let summary = Summary::from_facts(&facts);
+        assert_eq!(summary.stddev, Duration::new(1, 290994448));
     }
 
     #[test]

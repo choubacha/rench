@@ -55,7 +55,7 @@ Took 4.813263821 seconds
 2077.5923306697964 requests / second
 
 Summary
-  Average:   1.88827 ms
+  Average:   1.88827 ms (std: 0.763338 ms)
   Median:    1.012478 ms
   Longest:   1005.942426 ms
   Shortest:  0.403114 ms
