@@ -10,6 +10,8 @@ A benchmark utility for end points. Written in rust... rust + bench = rench
 
 # Installation
 
+Installation requires either git or cargo.
+
 ### From Source
 Clone or fork the repo and run the following:
 
