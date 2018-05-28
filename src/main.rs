@@ -92,7 +92,7 @@ fn main() {
 
     let plan = Plan::new(threads, requests);
 
-    let eng = match matches.value_of("engine").unwrap_or("reqwest") {
+    let eng = match matches.value_of("engine").unwrap_or("hyper") {
         "hyper" => engine::Engine::new(urls.clone()).with_hyper(),
         "reqwest" | _ => engine::Engine::new(urls.clone()),
     };
