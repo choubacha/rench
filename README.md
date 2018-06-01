@@ -101,16 +101,19 @@ Git Release Names
 Kevin Choubacha <chewbacha@gmail.com>
 
 USAGE:
-    rench [OPTIONS] <URL>...
+    rench [FLAGS] [OPTIONS] <URL>...
 
 FLAGS:
     -h, --help       Prints help information
+    -i, --head       The issue head requests instead of get
     -V, --version    Prints version information
 
 OPTIONS:
-    -c <concurrency>
-    -n <requests>
+        --chart-size <chart-size>    The size of the chart to render [values: none, n, small, s, medium, m, large, l]
+    -c <concurrency>                 The number of concurrent requests to make
+    -e, --engine <engine>            The engine to use [values: hyper, reqwest]
+    -n <requests>                    The number of requests in total to make
 
 ARGS:
-    <URL>...
+    <URL>...    Each url specified will be round robined.
 ```
