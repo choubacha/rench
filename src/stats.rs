@@ -1,8 +1,8 @@
-use std::time::Duration;
-use std::{cmp, fmt};
 use chart::Chart;
 use content_length::ContentLength;
 use std::collections::HashMap;
+use std::time::Duration;
+use std::{cmp, fmt};
 
 trait ToMilliseconds {
     fn to_ms(&self) -> f64;

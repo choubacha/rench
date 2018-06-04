@@ -1,8 +1,8 @@
 use engine::Engine;
-use plan::Plan;
 use message::Message;
+use plan::Plan;
 use stats::Fact;
-use std::{thread, sync::mpsc::Sender};
+use std::{sync::mpsc::Sender, thread};
 
 /// The runner struct represents an ongoing run time of the engine.
 pub struct Runner {

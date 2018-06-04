@@ -1,5 +1,5 @@
-use std::ops::Add;
 use std::fmt;
+use std::ops::Add;
 
 /// Represents the content length of an http request. The ContentLength is
 /// a scalar value that represents the number of bytes (octets) in the

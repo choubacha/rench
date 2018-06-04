@@ -1,6 +1,8 @@
-use std::{cmp, thread, sync::mpsc::{channel, Receiver, Sender}};
 use message::Message;
 use plan::Plan;
+use std::{cmp,
+          sync::mpsc::{channel, Receiver, Sender},
+          thread};
 
 /// Kicks off the collector which is a background thread. The collector will capture
 /// all data sent to the sender and then will return on the handle the entire dataset.

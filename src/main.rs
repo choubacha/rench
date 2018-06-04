@@ -1,4 +1,6 @@
 extern crate clap;
+extern crate crossbeam;
+extern crate crossbeam_channel;
 extern crate futures;
 extern crate hyper;
 extern crate hyper_tls;
@@ -13,12 +15,13 @@ mod collector;
 mod content_length;
 mod engine;
 mod message;
+mod new;
 mod plan;
 mod runner;
 mod stats;
-use stats::{ChartSize, Fact, Summary};
 use plan::Plan;
 use runner::Runner;
+use stats::{ChartSize, Fact, Summary};
 
 fn main() {
     let matches = App::new("Git Release Names")

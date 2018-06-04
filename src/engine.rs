@@ -1,6 +1,6 @@
 use bench;
-use stats::Fact;
 use content_length::ContentLength;
+use stats::Fact;
 
 /// The engine of making requests. The engine implements making the requests and producing
 /// facts for the stats collector to process.
@@ -100,10 +100,10 @@ impl Engine {
     where
         F: FnMut(Fact),
     {
+        use futures::{Future, Stream};
         use hyper::{self, Client, Request, Uri};
         use hyper_tls::HttpsConnector;
         use tokio_core::reactor::Core;
-        use futures::{Future, Stream};
 
         let mut core = Core::new().expect("Setting up tokio core failed");
         let handle = core.handle();
