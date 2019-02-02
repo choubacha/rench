@@ -53,7 +53,16 @@ fn main() {
                 .short("e")
                 .takes_value(true)
                 .possible_values(&["hyper", "reqwest"])
+                .default_value("hyper")
                 .help("The engine to use"),
+        )
+        .arg(
+            Arg::with_name("header")
+                .long("header")
+                .multiple(true)
+                .takes_value(true)
+                .number_of_values(1)
+                .help("Headers to inject in the request. Example '--header user-agent=rust-rench'"),
         )
         .arg(
             Arg::with_name("chart-size")
@@ -90,11 +99,17 @@ fn main() {
         _ => unreachable!(),
     };
 
+    let headers: Vec<String> = matches
+        .values_of("header")
+        .unwrap_or(Default::default())
+        .map(|v| v.to_string())
+        .collect();
+
     let plan = Plan::new(threads, requests);
 
     let eng = match matches.value_of("engine").unwrap_or("hyper") {
-        "hyper" => engine::Engine::new(urls.clone()).with_hyper(),
-        "reqwest" | _ => engine::Engine::new(urls.clone()),
+        "hyper" => engine::Engine::new(urls.clone(), headers).with_hyper(),
+        "reqwest" | _ => engine::Engine::new(urls.clone(), headers),
     };
 
     let eng = if matches.is_present("head-requests") {
