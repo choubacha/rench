@@ -8,6 +8,7 @@ use content_length::ContentLength;
 pub struct Engine {
     urls: Vec<String>,
     method: Method,
+    headers: Vec<String>,
     kind: Kind,
 }
 
@@ -29,10 +30,11 @@ const DEFAULT_KIND: Kind = Kind::Reqwest;
 
 impl Engine {
     /// Creates a new engine. The engine will default to using `reqwest`
-    pub fn new(urls: Vec<String>) -> Engine {
+    pub fn new(urls: Vec<String>, headers: Vec<String>) -> Engine {
         Engine {
             urls,
             method: DEFAULT_METHOD,
+            headers,
             kind: DEFAULT_KIND,
         }
     }
@@ -65,12 +67,27 @@ impl Engine {
     where
         F: FnMut(Fact),
     {
-        use reqwest::{self, Client, Request};
-        let client = Client::new();
+        use reqwest::{self, Client, Request, header};
+
+        let mut headers = header::HeaderMap::new();
+        self.headers.iter().for_each(|h| {
+            let values: Vec<String> = h.split("=")
+                .map(|x| x.to_string().to_lowercase())
+                .collect();
+
+            headers.insert(
+                header::HeaderName::from_lowercase(values[0].as_bytes()).expect("invalid header name."),
+                header::HeaderValue::from_str(&values[1]).expect("invalid header value.")
+            );
+        });
+
+        let client = Client::builder()
+                    .default_headers(headers)
+                    .build().expect("Failed to build reqwest client");
 
         let method = match self.method {
-            Method::Get => reqwest::Method::Get,
-            Method::Head => reqwest::Method::Head,
+            Method::Get => reqwest::Method::GET,
+            Method::Head => reqwest::Method::HEAD,
         };
 
         for n in 0..requests {
@@ -120,8 +137,20 @@ impl Engine {
 
         for n in 0..requests {
             let uri = &urls[n % urls.len()];
-            let request = client
-                .request(Request::new(method.clone(), uri.clone()))
+
+            let mut req = Request::new(method.clone(), uri.clone());
+            {
+                let mut headers = req.headers_mut();
+                self.headers.iter().for_each(|h| {
+                    let values: Vec<String> = h.split("=")
+                        .map(|x| x.to_string().to_lowercase())
+                        .collect();
+
+                    headers.set_raw(values[0].to_string(), values[1].as_str());
+                });
+            }
+
+            let request = client.request(req)
                 .and_then(|response| {
                     let status = response.status().as_u16();
                     response
@@ -146,7 +175,7 @@ mod tests {
 
     #[test]
     fn reqwest_engine_can_collect_facts() {
-        let eng = Engine::new(vec!["https://www.google.com".to_string()]);
+        let eng = Engine::new(vec!["https://www.google.com".to_string()], vec![]);
         let mut fact: Option<Fact> = None;
         eng.run(1, |f| fact = Some(f));
         assert!(fact.is_some());
@@ -154,7 +183,7 @@ mod tests {
 
     #[test]
     fn hyper_engine_can_collect_facts() {
-        let eng = Engine::new(vec!["https://www.google.com".to_string()]).with_hyper();
+        let eng = Engine::new(vec!["https://www.google.com".to_string()], vec![]).with_hyper();
         let mut fact: Option<Fact> = None;
         eng.run(1, |f| fact = Some(f));
         assert!(fact.is_some());
