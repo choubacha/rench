@@ -239,4 +239,62 @@ mod tests {
             )
         }
     }
+
+    #[test]
+    fn hyper_engine_can_pass_headers() {
+        // Request without headers first
+        let eng = Engine::new(vec!["https://httpbin.org/headers".to_string()], vec![]).with_hyper();
+        let mut fact: Option<Fact> = None;
+        eng.run(1, |f| fact = Some(f));
+
+        let mut without_headers_size = 0;
+        if let Some(f) = fact {
+            without_headers_size = Summary::from_facts(&[f]).content_length().bytes();
+        }
+
+        // Request with headers
+        let (k, v) = ("key", "val");
+        let eng = Engine::new(
+            vec!["https://httpbin.org/headers".to_string()],
+            vec![(k.to_string(), v.to_string())]
+        ).with_hyper();
+        let mut fact: Option<Fact> = None;
+        eng.run(1, |f| fact = Some(f));
+
+        // Sample response
+        // {
+        //   "headers": {
+        //     "Accept": "*/*",
+        //     "Connection": "close",
+        //     "Host": "httpbin.org",
+        //     "Key": "val",
+        //     "User-Agent": "curl/7.47.0"
+        //   }
+        // }
+        // The 13 bytes represent the extra characters returned by
+        // httpbin to pretty print the output of the header key and val.
+        let extra_char_bytes = 13;
+
+        if let Some(f) = fact {
+            assert_eq!(
+                Summary::from_facts(&[f]).content_length().bytes() as usize,
+                (without_headers_size as usize)+ k.as_bytes().len() + k.as_bytes().len() + extra_char_bytes
+            )
+        }
+
+        let (k, v) = ("key1", "val1");
+        let eng = Engine::new(
+            vec!["https://httpbin.org/headers".to_string()],
+            vec![(k.to_string(), v.to_string())]
+        ).with_hyper();
+        let mut fact: Option<Fact> = None;
+        eng.run(1, |f| fact = Some(f));
+
+        if let Some(f) = fact {
+            assert_eq!(
+                Summary::from_facts(&[f]).content_length().bytes() as usize,
+                (without_headers_size as usize)+ k.as_bytes().len() + k.as_bytes().len() + extra_char_bytes
+            )
+        }
+    }
 }
