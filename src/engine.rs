@@ -8,7 +8,7 @@ use content_length::ContentLength;
 pub struct Engine {
     urls: Vec<String>,
     method: Method,
-    headers: Vec<String>,
+    headers: Vec<(String, String)>,
     kind: Kind,
 }
 
@@ -30,7 +30,7 @@ const DEFAULT_KIND: Kind = Kind::Reqwest;
 
 impl Engine {
     /// Creates a new engine. The engine will default to using `reqwest`
-    pub fn new(urls: Vec<String>, headers: Vec<String>) -> Engine {
+    pub fn new(urls: Vec<String>, headers: Vec<(String, String)>) -> Engine {
         Engine {
             urls,
             method: DEFAULT_METHOD,
@@ -70,14 +70,10 @@ impl Engine {
         use reqwest::{self, Client, Request, header};
 
         let mut headers = header::HeaderMap::new();
-        self.headers.iter().for_each(|h| {
-            let values: Vec<String> = h.split("=")
-                .map(|x| x.to_string().to_lowercase())
-                .collect();
-
+        self.headers.iter().for_each(|(k, v)| {
             headers.insert(
-                header::HeaderName::from_lowercase(values[0].as_bytes()).expect("invalid header name."),
-                header::HeaderValue::from_str(&values[1]).expect("invalid header value.")
+                header::HeaderName::from_lowercase(k.as_bytes()).expect("invalid header name."),
+                header::HeaderValue::from_str(&v).expect("invalid header value.")
             );
         });
 
@@ -141,12 +137,8 @@ impl Engine {
             let mut req = Request::new(method.clone(), uri.clone());
             {
                 let mut headers = req.headers_mut();
-                self.headers.iter().for_each(|h| {
-                    let values: Vec<String> = h.split("=")
-                        .map(|x| x.to_string().to_lowercase())
-                        .collect();
-
-                    headers.set_raw(values[0].to_string(), values[1].as_str());
+                self.headers.iter().for_each(|(k,v)| {
+                    headers.set_raw(k.to_string(), v.as_str());
                 });
             }
 
@@ -172,6 +164,7 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use stats::Summary;
 
     #[test]
     fn reqwest_engine_can_collect_facts() {
@@ -187,5 +180,63 @@ mod tests {
         let mut fact: Option<Fact> = None;
         eng.run(1, |f| fact = Some(f));
         assert!(fact.is_some());
+    }
+
+    #[test]
+    fn reqwest_engine_can_pass_headers() {
+        // Request without headers first
+        let eng = Engine::new(vec!["https://httpbin.org/headers".to_string()], vec![]);
+        let mut fact: Option<Fact> = None;
+        eng.run(1, |f| fact = Some(f));
+
+        let mut without_headers_size = 0;
+        if let Some(f) = fact {
+            without_headers_size = Summary::from_facts(&[f]).content_length().bytes();
+        }
+
+        // Request with headers
+        let (k, v) = ("key", "val");
+        let eng = Engine::new(
+            vec!["https://httpbin.org/headers".to_string()],
+            vec![(k.to_string(), v.to_string())]
+        );
+        let mut fact: Option<Fact> = None;
+        eng.run(1, |f| fact = Some(f));
+
+        // Sample response
+        // {
+        //   "headers": {
+        //     "Accept": "*/*",
+        //     "Connection": "close",
+        //     "Host": "httpbin.org",
+        //     "Key": "val",
+        //     "User-Agent": "curl/7.47.0"
+        //   }
+        // }
+        // The 13 bytes represent the extra characters returned by
+        // httpbin to pretty print the output of the header key and val.
+        let extra_char_bytes = 13;
+
+        if let Some(f) = fact {
+            assert_eq!(
+                Summary::from_facts(&[f]).content_length().bytes() as usize,
+                (without_headers_size as usize)+ k.as_bytes().len() + k.as_bytes().len() + extra_char_bytes
+            )
+        }
+
+        let (k, v) = ("key1", "val1");
+        let eng = Engine::new(
+            vec!["https://httpbin.org/headers".to_string()],
+            vec![(k.to_string(), v.to_string())]
+        );
+        let mut fact: Option<Fact> = None;
+        eng.run(1, |f| fact = Some(f));
+
+        if let Some(f) = fact {
+            assert_eq!(
+                Summary::from_facts(&[f]).content_length().bytes() as usize,
+                (without_headers_size as usize)+ k.as_bytes().len() + k.as_bytes().len() + extra_char_bytes
+            )
+        }
     }
 }

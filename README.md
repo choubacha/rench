@@ -113,7 +113,7 @@ OPTIONS:
                                      large, l]
     -c <concurrency>                 The number of concurrent requests to make
     -e, --engine <engine>            The engine to use [default: hyper]  [possible values: hyper, reqwest]
-        --header <header>...         Headers to inject in the request. Example '--header user-agent=rust-rench'
+        --header <header>...         Headers to inject in the request. Example '--header user-agent:rust-rench'
     -n <requests>                    The number of requests in total to make
 
 ARGS:

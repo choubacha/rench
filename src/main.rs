@@ -62,7 +62,7 @@ fn main() {
                 .multiple(true)
                 .takes_value(true)
                 .number_of_values(1)
-                .help("Headers to inject in the request. Example '--header user-agent=rust-rench'"),
+                .help("Headers to inject in the request. Example '--header user-agent:rust-rench'"),
         )
         .arg(
             Arg::with_name("chart-size")
@@ -99,10 +99,18 @@ fn main() {
         _ => unreachable!(),
     };
 
-    let headers: Vec<String> = matches
+    let headers: Vec<(String, String)> = matches
         .values_of("header")
         .unwrap_or(Default::default())
-        .map(|v| v.to_string())
+        .map(|v| {
+            let m = v.split(":").collect::<Vec<&str>>();
+            if m.len() != 2 {
+                panic!("Invalid header.");
+            }
+            let k = m[0].to_string().to_lowercase();
+            let v = m[1].to_string();
+            (k, v)
+        })
         .collect();
 
     let plan = Plan::new(threads, requests);
