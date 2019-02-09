@@ -201,6 +201,11 @@ impl Summary {
         }
     }
 
+    #[allow(dead_code)]
+    pub fn content_length(self, ) -> ContentLength {
+        self.content_length
+    }
+
     pub fn with_chart_size(mut self, size: ChartSize) -> Self {
         self.chart_size = size;
         self
