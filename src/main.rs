@@ -103,7 +103,7 @@ fn main() {
         .values_of("header")
         .unwrap_or(Default::default())
         .map(|v| {
-            let m = v.split(":").collect::<Vec<&str>>();
+            let m = v.splitn(2, ":").collect::<Vec<&str>>();
             if m.len() != 2 {
                 panic!("Invalid header.");
             }
